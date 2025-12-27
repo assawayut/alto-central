@@ -95,7 +95,9 @@ uvicorn app.main:app --reload --port 8642
 
 | Endpoint | Description |
 |----------|-------------|
-| `POST /api/v1/sites/{site_id}/timeseries/query` | Query historical timeseries |
+| `POST /api/v1/sites/{site_id}/timeseries/query` | Custom timeseries query with resampling |
+| `GET /api/v1/sites/{site_id}/timeseries/aggregated` | Pre-aggregated data (24h/7d/30d) |
+| `GET /api/v1/sites/{site_id}/timeseries/latest-from-history` | Latest values from TimescaleDB |
 
 ## Site Configuration
 
@@ -199,6 +201,33 @@ sites:
   }
 }
 ```
+
+### Timeseries Aggregated (`/timeseries/aggregated`)
+
+```
+GET /api/v1/sites/kspo/timeseries/aggregated?device_id=plant&datapoint=power&period=24h&aggregation=hourly
+```
+
+```json
+{
+  "site_id": "kspo",
+  "device_id": "plant",
+  "datapoint": "power",
+  "period": "24h",
+  "aggregation": "hourly",
+  "data": [
+    {"timestamp": "2025-12-26T07:00:00+00:00", "value": 567.53},
+    {"timestamp": "2025-12-26T08:00:00+00:00", "value": 566.95},
+    {"timestamp": "2025-12-26T09:00:00+00:00", "value": 575.45}
+  ]
+}
+```
+
+**Query parameters:**
+- `device_id`: Device identifier (default: `plant`)
+- `datapoint`: Datapoint name (default: `power`)
+- `period`: Time period - `24h`, `7d`, `30d` (default: `24h`)
+- `aggregation`: Aggregation level - `hourly`, `daily` (default: `hourly`)
 
 ## Project Structure
 

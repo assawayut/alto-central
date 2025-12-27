@@ -66,7 +66,7 @@ async def query_timeseries(
             datapoint_values[dp] = []
         datapoint_values[dp].append(
             TimeseriesDataPoint(
-                timestamp=row["time"],
+                timestamp=row["timestamp"],
                 value=row["value"],
             )
         )
@@ -136,7 +136,7 @@ async def get_aggregated_data(
         "period": period,
         "aggregation": aggregation,
         "data": [
-            {"timestamp": row["time"].isoformat(), "value": row["value"]}
+            {"timestamp": row["timestamp"].isoformat(), "value": row["value"]}
             for row in rows
         ],
     }

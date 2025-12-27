@@ -164,7 +164,98 @@ todayTotal = energy.today.total ?? 'N/A';
 
 ---
 
-## 4. Sites List
+## 4. Historical Timeseries Data
+
+### API Endpoint (Simple)
+```
+GET /api/v1/sites/{site_id}/timeseries/aggregated
+```
+
+### Query Parameters
+| Parameter | Default | Options | Description |
+|-----------|---------|---------|-------------|
+| `device_id` | `plant` | Any device ID | Device to query |
+| `datapoint` | `power` | Any datapoint | Datapoint to query |
+| `period` | `24h` | `24h`, `7d`, `30d` | Time range |
+| `aggregation` | `hourly` | `hourly`, `daily` | Aggregation level |
+
+### Response Structure
+```typescript
+interface TimeseriesAggregatedResponse {
+  site_id: string;
+  device_id: string;
+  datapoint: string;
+  period: string;
+  aggregation: string;
+  data: Array<{
+    timestamp: string;  // ISO 8601
+    value: number;
+  }>;
+}
+```
+
+### Example Fetch
+```typescript
+async function fetchTimeseries(
+  siteId: string,
+  deviceId: string = 'plant',
+  datapoint: string = 'power',
+  period: string = '24h'
+): Promise<TimeseriesAggregatedResponse> {
+  const params = new URLSearchParams({ device_id: deviceId, datapoint, period });
+  const response = await fetch(
+    `http://localhost:8642/api/v1/sites/${siteId}/timeseries/aggregated?${params}`
+  );
+  return response.json();
+}
+```
+
+### Use Case
+`BuildingLoadGraph` component:
+```typescript
+const data = await fetchTimeseries(siteId, 'plant', 'power', '24h');
+
+// Transform for ECharts
+const chartData = data.data.map(d => ({
+  time: new Date(d.timestamp),
+  value: d.value
+}));
+```
+
+### API Endpoint (Advanced)
+```
+POST /api/v1/sites/{site_id}/timeseries/query
+```
+
+### Request Body
+```typescript
+interface TimeseriesQuery {
+  device_id: string;
+  datapoints: string[];  // Can query multiple datapoints
+  start_timestamp: string;  // ISO 8601
+  end_timestamp: string;    // ISO 8601
+  resampling?: string;      // '1m', '5m', '15m', '30m', '1h', '6h', '1d'
+}
+```
+
+### Example
+```typescript
+const response = await fetch(`${API_BASE}/sites/${siteId}/timeseries/query`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    device_id: 'chiller_1',
+    datapoints: ['power', 'cooling_rate', 'efficiency'],
+    start_timestamp: '2025-12-26T00:00:00',
+    end_timestamp: '2025-12-27T00:00:00',
+    resampling: '1h'
+  })
+});
+```
+
+---
+
+## 5. Sites List
 
 ### API Endpoint
 ```
@@ -192,7 +283,7 @@ Site map page - list all available sites with their database status.
 
 ---
 
-## 5. Polling vs WebSocket
+## 6. Polling vs WebSocket
 
 ### Current Approach: Polling
 For now, use polling with `setInterval`:
@@ -219,7 +310,7 @@ ws://localhost:8642/ws/sites/{site_id}/realtime
 
 ---
 
-## 6. Error Handling
+## 7. Error Handling
 
 ### Empty Response
 When no data is available, the API returns empty objects:
@@ -246,13 +337,13 @@ const displayValue = value !== null ? value.toFixed(2) : 'N/A';
 
 ---
 
-## 7. CORS Configuration
+## 8. CORS Configuration
 
 The backend allows CORS from all origins in development. For production, configure allowed origins in backend settings.
 
 ---
 
-## 8. Example: Replacing useRealtime Hook
+## 9. Example: Replacing useRealtime Hook
 
 ### Before (Mock)
 ```typescript
@@ -309,7 +400,7 @@ export function useRealtime() {
 
 ---
 
-## 9. Animation Triggers
+## 10. Animation Triggers
 
 The `PlantDiagram` animation depends on flow rate values:
 
@@ -321,7 +412,7 @@ const cdwFlowing = devices['condenser_water_loop']?.flow_rate?.value >= 1;
 
 ---
 
-## 10. Testing API Endpoints
+## 11. Testing API Endpoints
 
 Use curl to test endpoints:
 
@@ -337,6 +428,12 @@ curl http://localhost:8642/api/v1/sites/kspo/realtime/plant
 
 # Get energy data
 curl http://localhost:8642/api/v1/sites/kspo/energy/daily
+
+# Get historical timeseries (hourly plant power, last 24h)
+curl "http://localhost:8642/api/v1/sites/kspo/timeseries/aggregated?device_id=plant&datapoint=power&period=24h"
+
+# Get historical timeseries (daily, last 30 days)
+curl "http://localhost:8642/api/v1/sites/kspo/timeseries/aggregated?device_id=plant&datapoint=power&period=30d&aggregation=daily"
 ```
 
 Or use the Swagger UI at: http://localhost:8642/docs

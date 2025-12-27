@@ -150,9 +150,10 @@ class TimescaleConnection:
         try:
             if resample:
                 # Use time_bucket for resampling
-                query = """
+                # Note: interval is embedded in SQL (safe - values come from resample_map)
+                query = f"""
                     SELECT
-                        time_bucket($5, timestamp) as timestamp,
+                        time_bucket(INTERVAL '{resample}', timestamp) as timestamp,
                         device_id,
                         datapoint,
                         AVG(value) as value
@@ -161,13 +162,13 @@ class TimescaleConnection:
                       AND device_id = $2
                       AND datapoint = ANY($3)
                       AND timestamp >= $4
-                      AND timestamp < $6
+                      AND timestamp < $5
                     GROUP BY 1, 2, 3
                     ORDER BY timestamp
                 """
                 return await self.fetch(
                     query, self.site_id, device_id, datapoints,
-                    start_time, resample, end_time
+                    start_time, end_time
                 )
             else:
                 query = """
