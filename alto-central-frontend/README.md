@@ -46,13 +46,15 @@ alto-central-frontend/
 │   ├── pages/
 │   │   ├── ChillerPlant/    # Chiller plant dashboard
 │   │   │   ├── components/  # Dashboard components
-│   │   │   │   ├── BuildingLoadGraph.tsx
-│   │   │   │   ├── EfficiencyCard.tsx
-│   │   │   │   ├── PlantDiagram.tsx      # Animated water flow diagram
-│   │   │   │   ├── PlantEquipmentCard.tsx
-│   │   │   │   ├── PowerCard.tsx
-│   │   │   │   ├── SystemAlertCard.tsx
-│   │   │   │   └── WeatherStationCard.tsx
+│   │   │   │   ├── BuildingLoadGraph.tsx   # Power & cooling load chart
+│   │   │   │   ├── EfficiencyCard.tsx      # Efficiency gauge with thresholds
+│   │   │   │   ├── EnergyUsageCard.tsx     # Yesterday/Today energy comparison
+│   │   │   │   ├── PlantDiagram.tsx        # Animated water flow diagram
+│   │   │   │   ├── PlantEquipmentCard.tsx  # Equipment status grid
+│   │   │   │   ├── PowerCard.tsx           # Plant Power, Cooling Load, Part-Load
+│   │   │   │   ├── SystemAlertCard.tsx     # AFDD alerts by category
+│   │   │   │   ├── UpcomingEventsCard.tsx  # Maintenance/events timeline
+│   │   │   │   └── WeatherStationCard.tsx  # DBT, WBT, Humidity
 │   │   │   └── index.tsx
 │   │   └── SiteMap/         # Landing page with map
 │   │       ├── components/
@@ -81,10 +83,21 @@ alto-central-frontend/
 
 2. **ChillerPlant** (`/site/:siteId`)
    - 3-column layout:
-     - Left: BuildingLoadGraph, SystemAlertCard
-     - Center: Efficiency/Power/Weather cards + Equipment Status + Plant Diagram
-     - Right: Timeline/Events (placeholder)
+     - **Left Column**: EnergyUsageCard, BuildingLoadGraph, SystemAlertCard
+     - **Center Column**: Top row (Efficiency, Power/Load/Part-Load, Weather) + Bottom row (Equipment Status | Plant Diagram)
+     - **Right Column**: UpcomingEventsCard (maintenance timeline)
    - Animated water flow diagram showing CHW and CDW loops
+
+### Dashboard Components
+
+- **EnergyUsageCard**: Compares Yesterday vs Today energy usage (Total, Plant, Air-Side) with DBT/RH
+- **PowerCard**: 3-section card showing Plant Power (kW), Cooling Load (RT), Part-Load (% with progress bar)
+- **WeatherStationCard**: Current conditions - DBT, WBT, Humidity with inline values
+- **UpcomingEventsCard**: Horizontal timeline header + vertical event list grouped by date
+  - Event types: maintenance, inspection, alert (color-coded)
+  - Shows equipment tags, descriptions, and scheduled times
+- **PlantDiagram**: Animated water flow showing CHW/CDW loops with temperature/flow values
+- **PlantEquipmentCard**: Grid of equipment (Chillers, Pumps, Cooling Towers) with status indicators
 
 ### Mock Features
 
@@ -153,8 +166,8 @@ Most dashboard components were copied from `alto-cero-interface` project and ada
 1. **Backend Integration**: Replace mock data with real API calls
 2. **Air-Side Monitoring**: Add air handling unit dashboards
 3. **ML Optimization**: Integrate machine learning recommendations
-4. **Timeline/Events**: Right column for operational events
-5. **Hotel Guest Rooms**: Room-level HVAC monitoring
+4. **Hotel Guest Rooms**: Room-level HVAC monitoring
+5. **Events API**: Connect UpcomingEventsCard to real maintenance scheduling system
 
 ### Backend Requirements
 When implementing backend:

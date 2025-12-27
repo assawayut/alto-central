@@ -1,36 +1,76 @@
 import { useRealtime } from '@/features/realtime';
+import { FiInfo } from 'react-icons/fi';
 
 interface PowerCardProps {
-  deviceId: string;
-  title: string;
+  deviceId?: string;
+  title?: string;
 }
 
-export function PowerCard({ deviceId = 'plant', title = 'Plant Power' }: PowerCardProps) {
-  // Mock data waiting for real-time API
+export function PowerCard({ deviceId = 'plant' }: PowerCardProps) {
   const { getValue } = useRealtime();
-  const power = getValue(deviceId, 'power');
-  const unit = 'kW';
+
+  const power = getValue(deviceId, 'power') as number;
+  const coolingLoad = getValue(deviceId, 'cooling_rate') as number;
+
+  // Calculate part-load percentage (cooling load / design capacity)
+  // Assuming design capacity of 200 RT for demo
+  const designCapacity = 200;
+  const partLoad = coolingLoad ? (coolingLoad / designCapacity) * 100 : 0;
 
   return (
-    <div className="w-full h-full p-2 alto-card flex flex-col justify-between items-start overflow-hidden bg-background">
-      <div className="w-full flex justify-start items-center overflow-x-auto">
-        <div className="flex-shrink-0">
-          <div className="text-[#065BA9] text-sm font-semibold whitespace-nowrap">
-            {title}
+    <div className="w-full h-full alto-card flex items-stretch overflow-hidden bg-background">
+      {/* Plant Power */}
+      <div className="flex-1 p-3 flex flex-col justify-between">
+        <div className="text-[#065BA9] text-sm font-semibold">Plant Power</div>
+        <div>
+          <div className="text-[#0E7EE4] text-[32px] font-semibold leading-tight">
+            {power == null ? '-' : power.toFixed(0)}
           </div>
+          <div className="text-[#788796] text-xs">kW</div>
         </div>
       </div>
-      
-      <div className="w-full flex flex-col justify-start items-start overflow-x-auto">
-        <div className="text-[#0E7EE4] text-[28px] sm:text-[32px] font-semibold whitespace-nowrap">
-          {power == null ? '-' : power.toFixed(0).toLocaleString()}
+
+      {/* Divider */}
+      <div className="w-px bg-gray-200 my-2" />
+
+      {/* Cooling Load */}
+      <div className="flex-1 p-3 flex flex-col justify-between">
+        <div className="text-[#065BA9] text-sm font-semibold">Cooling Load</div>
+        <div>
+          <div className="text-[#0E7EE4] text-[32px] font-semibold leading-tight">
+            {coolingLoad == null ? '-' : coolingLoad.toFixed(0)}
+          </div>
+          <div className="text-[#788796] text-xs">RT</div>
         </div>
-        <div className="text-[#788796] text-[13px] font-normal whitespace-nowrap">
-          {unit}
+      </div>
+
+      {/* Divider */}
+      <div className="w-px bg-gray-200 my-2" />
+
+      {/* Part-Load */}
+      <div className="flex-1 p-3 flex flex-col justify-between">
+        <div className="flex items-center gap-1">
+          <span className="text-[#788796] text-sm font-medium">Part-Load</span>
+          <FiInfo className="w-3.5 h-3.5 text-[#0E7EE4]" />
+        </div>
+        <div>
+          <div className="flex items-baseline gap-1">
+            <span className="text-[#0E7EE4] text-[28px] font-semibold leading-tight">
+              {partLoad.toFixed(1)}
+            </span>
+            <span className="text-[#788796] text-sm">%</span>
+          </div>
+          {/* Progress bar */}
+          <div className="mt-2 w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-[#0E7EE4] rounded-full transition-all duration-300"
+              style={{ width: `${Math.min(partLoad, 100)}%` }}
+            />
+          </div>
         </div>
       </div>
     </div>
   );
-} 
+}
 
 export default PowerCard;
