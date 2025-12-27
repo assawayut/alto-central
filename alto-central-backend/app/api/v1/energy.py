@@ -5,8 +5,9 @@ Each site can have its own database configured in sites.yaml.
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Path
 
@@ -30,8 +31,13 @@ async def get_daily_energy(
     """Get daily energy comparison (yesterday vs today).
 
     Calculates energy from power readings integrated over time.
+    Uses the site's local timezone to determine day boundaries.
     Returns null values if data is not available.
     """
+    # Get site config for timezone
+    site = get_site_by_id(site_id)
+    site_tz = ZoneInfo(site.timezone) if site else ZoneInfo("UTC")
+
     # Get site-specific TimescaleDB connection
     timescale = await get_timescale(site_id)
 
@@ -43,10 +49,16 @@ async def get_daily_energy(
             unit="kWh",
         )
 
-    now = datetime.utcnow()
-    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    yesterday_start = today_start - timedelta(days=1)
+    # Calculate day boundaries in site's local timezone
+    now_local = datetime.now(site_tz)
+    today_start_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+    yesterday_start_local = today_start_local - timedelta(days=1)
+
+    # Convert to UTC for database query (TimescaleDB stores in UTC)
+    today_start = today_start_local.astimezone(timezone.utc)
+    yesterday_start = yesterday_start_local.astimezone(timezone.utc)
     yesterday_end = today_start
+    now_utc = now_local.astimezone(timezone.utc)
 
     # Query yesterday's energy from aggregated_data
     energy_query = """
@@ -65,7 +77,7 @@ async def get_daily_energy(
             energy_query, site_id, yesterday_start, yesterday_end
         )
         today_result = await timescale.fetch(
-            energy_query, site_id, today_start, now
+            energy_query, site_id, today_start, now_utc
         )
 
         yesterday_plant = (
@@ -79,8 +91,7 @@ async def get_daily_energy(
             else None
         )
 
-        # Check site HVAC type from config
-        site = get_site_by_id(site_id)
+        # Check site HVAC type from config (site already fetched above)
         hvac_type = site.hvac_type if site else "water"
 
         # For water-only sites, plant IS the total (no air-side)

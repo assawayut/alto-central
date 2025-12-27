@@ -1,19 +1,23 @@
 import { useEffect, useRef, useState } from "react";
+import { useParams } from "react-router-dom";
 import { Loader } from "@/components/ui/loader";
 import * as echarts from "echarts";
-import { useAuth } from "@/features/auth";
-import { fetchAggregatedData } from "@/features/timeseries";
-import { getSiteId } from "@/features/auth";
+import { API_ENDPOINTS } from "@/config/api";
+import { getSiteById } from "@/config/sites";
 import { DateTime } from 'luxon';
 
-// Define the interface for the transformed data structure that matches what the component expects
-interface TransformedData {
-  bucket: string;
-  avg_value: number;
+interface TimeseriesDataPoint {
+  timestamp: string;
+  value: number;
+}
+
+interface TimeseriesResponse {
   site_id: string;
   device_id: string;
-  model: string;
   datapoint: string;
+  period: string;
+  aggregation: string;
+  data: TimeseriesDataPoint[];
 }
 
 const BuildingLoadGraph: React.FC = () => {
@@ -21,17 +25,18 @@ const BuildingLoadGraph: React.FC = () => {
   const chartInstanceRef = useRef<echarts.ECharts | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { site } = useAuth();
+  const { siteId } = useParams<{ siteId: string }>();
+  const site = getSiteById(siteId || '');
 
   // Initialize chart with default configuration
   const initializeChart = () => {
     if (!chartRef.current) return;
-    
+
     // Make sure any existing chart is disposed first
     if (chartInstanceRef.current) {
       chartInstanceRef.current.dispose();
     }
-    
+
     // Check if the container has proper dimensions
     if (chartRef.current.clientWidth === 0 || chartRef.current.clientHeight === 0) {
       console.log("Chart container has no dimensions yet, will retry");
@@ -42,8 +47,9 @@ const BuildingLoadGraph: React.FC = () => {
     const chartInstance = echarts.init(chartRef.current);
     chartInstanceRef.current = chartInstance;
 
-    const startDatetime = DateTime.now().startOf('day');
-    const endDateTime = startDatetime.plus({ days: 1 });
+    // Use rolling 24-hour window to match API's "24h" period
+    const endDateTime = DateTime.now();
+    const startDatetime = endDateTime.minus({ hours: 24 });
 
     // Create empty data arrays for initial display
     const emptyData = Array.from({ length: 24 }, (_, i) => [
@@ -55,16 +61,9 @@ const BuildingLoadGraph: React.FC = () => {
       tooltip: {
         trigger: "axis",
         formatter: function (params: any[]) {
-          const date = new Date(params[0].data[0]);
-          const dateString = date.toLocaleString("en-GB", {
-            day: "2-digit",
-            month: "short",
-            year: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-            hour12: false,
-          timeZone: site?.timezone || "Asia/Bangkok",
-          });
+          const timezone = site?.timezone || 'Asia/Bangkok';
+          const dt = DateTime.fromMillis(params[0].data[0]).setZone(timezone);
+          const dateString = dt.toFormat('dd MMM yyyy, HH:mm');
 
           const tooltipItems = params
             .map((param: any) => {
@@ -96,17 +95,16 @@ const BuildingLoadGraph: React.FC = () => {
       xAxis: {
         type: "time",
         splitNumber: 8,
-        min: startDatetime.toJSDate().toISOString(),
-        max: endDateTime.toJSDate().toISOString(),
+        min: startDatetime.toMillis(),
+        max: endDateTime.toMillis(),
         axisLabel: {
           formatter: function (params: number) {
-            const date = new Date(params);
-            return String(date.getHours()).padStart(2, "0");
+            const dt = DateTime.fromMillis(params).setZone(site?.timezone || 'Asia/Bangkok');
+            return dt.toFormat('HH:mm');
           },
           margin: 12,
           fontSize: 12,
           color: "#788796",
-          interval: 2 * 3600 * 1000,
         },
         axisTick: { show: false },
         axisLine: {
@@ -220,15 +218,15 @@ const BuildingLoadGraph: React.FC = () => {
     });
   };
 
-  const updateChartWithData = (powerData: TransformedData[], coolingLoadData: TransformedData[]) => {
+  const updateChartWithData = (powerData: TimeseriesDataPoint[], coolingLoadData: TimeseriesDataPoint[]) => {
     if (!chartInstanceRef.current) return;
 
     const chartInstance = chartInstanceRef.current;
 
-    const transformData = (data: TransformedData[]) => {
+    const transformData = (data: TimeseriesDataPoint[]) => {
       return data.map(item => [
-        new Date(item.bucket).getTime(),
-        item.avg_value
+        new Date(item.timestamp).getTime(),
+        item.value
       ]);
     };
 
@@ -238,16 +236,16 @@ const BuildingLoadGraph: React.FC = () => {
     // Calculate max values for y-axis scaling
     const maxPowerValue = Math.max(...powerChartData.map(data => data[1]), 1);
     const maxLoadValue = Math.max(...coolingLoadChartData.map(data => data[1]), 1);
-    
+
     // Find the overall maximum value
     const maxValue = Math.max(maxPowerValue, maxLoadValue);
-    
+
     // Calculate appropriate y-axis max and interval
     const yAxisMax = Math.ceil((maxValue * 1.2) / 100) * 100;
-    
+
     // Calculate appropriate interval
     let yAxisInterval;
-    
+
     if (yAxisMax <= 500) {
       yAxisInterval = 100;
     } else if (yAxisMax <= 1000) {
@@ -317,12 +315,28 @@ const BuildingLoadGraph: React.FC = () => {
   };
 
   useEffect(() => {
+    if (!siteId) return;
+
     console.log('BuildingLoadGraph component mounted');
-    
+
     const handleResize = () => {
       if (chartInstanceRef.current) {
         chartInstanceRef.current.resize();
       }
+    };
+
+    const fetchTimeseries = async (datapoint: string): Promise<TimeseriesResponse> => {
+      const url = API_ENDPOINTS.timeseriesAggregated(siteId, {
+        device_id: 'plant',
+        datapoint,
+        period: '24h',
+        aggregation: 'hourly'
+      });
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch ${datapoint} data`);
+      }
+      return response.json();
     };
 
     const initializeAndFetchData = async () => {
@@ -333,92 +347,21 @@ const BuildingLoadGraph: React.FC = () => {
         // Initialize chart first
         initializeChart();
 
-        // Get site ID
-        const siteId = getSiteId() || '';
-        
-        const startTime = DateTime.now().startOf('day');
-        const endTime = startTime.plus({ days: 1 });
-
-        // Fetch power and cooling load data using fetchAggregatedData
-        const [plantResponse, airResponse] = await Promise.all([
-          fetchAggregatedData({
-            site_id: siteId,
-            device_id: 'plant',
-            datapoints: ['power', 'cooling_rate'],
-            start_timestamp: startTime.toISO(),
-            end_timestamp: endTime.toISO(),
-            resampling: '1h'
-          }),
-          fetchAggregatedData({
-            site_id: siteId,
-            device_id: 'air_distribution_system',
-            datapoints: ['power'],
-            start_timestamp: startTime.toISO(),
-            end_timestamp: endTime.toISO(),
-            resampling: '1h'
-          })
+        // Fetch power and cooling load data in parallel
+        const [powerResponse, coolingResponse] = await Promise.all([
+          fetchTimeseries('power'),
+          fetchTimeseries('cooling_rate')
         ]);
-        
-        // Access the nested data array from the API response
-        // Type assertion needed because API returns nested structure not reflected in types
-        const plantResponseData = (plantResponse.data as any)?.data || [];
-        const airResponseData = (airResponse.data as any)?.data || [];
-        
-        // Extract plant power data
-        const plantPowerData = plantResponseData
-          .filter((item: any) => item.datapoint === 'power')
-          .flatMap((item: any) => item.values.map((value: any) => ({
-            bucket: value.timestamp,
-            avg_value: value.value,
-            site_id: item.site_id,
-            device_id: item.device_id,
-            model: item.model,
-            datapoint: item.datapoint
-          })));
-        
-        // Extract air distribution system power data
-        const airPowerData = airResponseData
-          .filter((item: any) => item.datapoint === 'power')
-          .flatMap((item: any) => item.values.map((value: any) => ({
-            bucket: value.timestamp,
-            avg_value: value.value,
-            site_id: item.site_id,
-            device_id: item.device_id,
-            model: item.model,
-            datapoint: item.datapoint
-          })));
-        
-        // Combine plant and air distribution system power data
-        const combinedPowerData: TransformedData[] = [];
-        plantPowerData.forEach((plantPoint: TransformedData) => {
-          const airPoint = airPowerData.find((air: TransformedData) => air.bucket === plantPoint.bucket);
-          combinedPowerData.push({
-            bucket: plantPoint.bucket,
-            avg_value: plantPoint.avg_value + (airPoint?.avg_value || 0),
-            site_id: plantPoint.site_id,
-            device_id: 'combined_power',
-            model: plantPoint.model,
-            datapoint: 'power'
-          });
-        });
-        
-        const coolingLoadData = plantResponseData
-          .filter((item: any) => item.datapoint === 'cooling_rate')
-          .flatMap((item: any) => item.values.map((value: any) => ({
-            bucket: value.timestamp,
-            avg_value: value.value,
-            site_id: item.site_id,
-            device_id: item.device_id,
-            model: item.model,
-            datapoint: item.datapoint
-          })));
+
+        const powerData = powerResponse.data || [];
+        const coolingLoadData = coolingResponse.data || [];
 
         // Try updating chart with a small delay to ensure container is ready
         setTimeout(() => {
           if (!chartInstanceRef.current) {
             initializeChart();
           }
-          updateChartWithData(combinedPowerData, coolingLoadData);
+          updateChartWithData(powerData, coolingLoadData);
         }, 200);
 
       } catch (err) {
@@ -431,7 +374,7 @@ const BuildingLoadGraph: React.FC = () => {
 
     // Initial load with a delay to ensure DOM is ready
     const initTimer = setTimeout(initializeAndFetchData, 300);
-    
+
     // Add resize event listener
     window.addEventListener('resize', handleResize);
 
@@ -445,7 +388,7 @@ const BuildingLoadGraph: React.FC = () => {
         chartInstanceRef.current = null;
       }
     };
-  }, []);
+  }, [siteId]);
 
   return (
     <div className="p-2.5 alto-card">

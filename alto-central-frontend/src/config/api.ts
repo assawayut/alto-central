@@ -16,6 +16,21 @@ export const API_ENDPOINTS = {
 
   // Energy
   energyDaily: (siteId: string) => `${API_BASE_URL}/sites/${siteId}/energy/daily`,
+
+  // Timeseries
+  timeseriesAggregated: (siteId: string, params: {
+    device_id?: string;
+    datapoint?: string;
+    period?: string;
+    aggregation?: string;
+  }) => {
+    const searchParams = new URLSearchParams();
+    if (params.device_id) searchParams.set('device_id', params.device_id);
+    if (params.datapoint) searchParams.set('datapoint', params.datapoint);
+    if (params.period) searchParams.set('period', params.period);
+    if (params.aggregation) searchParams.set('aggregation', params.aggregation);
+    return `${API_BASE_URL}/sites/${siteId}/timeseries/aggregated?${searchParams}`;
+  },
 };
 
 // Polling interval in milliseconds

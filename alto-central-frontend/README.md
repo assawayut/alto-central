@@ -127,6 +127,15 @@ sites:
 | `GET /sites` | List all sites |
 | `GET /sites/{siteId}/realtime/latest` | Real-time device data |
 | `GET /sites/{siteId}/energy/daily` | Yesterday vs Today energy |
+| `GET /sites/{siteId}/timeseries/aggregated` | Historical data for charts |
+
+### Timeseries Query Parameters
+| Parameter | Default | Options | Description |
+|-----------|---------|---------|-------------|
+| `device_id` | `plant` | Any device ID | Device to query |
+| `datapoint` | `power` | Any datapoint | Datapoint to query |
+| `period` | `24h` | `24h`, `7d`, `30d` | Time range |
+| `aggregation` | `hourly` | `hourly`, `daily` | Aggregation level |
 
 ### Key Datapoints
 
@@ -175,6 +184,7 @@ sites:
 | Component | Data Source |
 |-----------|-------------|
 | `EnergyUsageCard` | `/energy/daily` API + realtime weather |
+| `BuildingLoadGraph` | `/timeseries/aggregated` API (plant power + cooling_rate, 24h hourly) |
 | `PowerCard` | `plant.power`, `plant.cooling_rate`, `plant.running_capacity` |
 | `WeatherStationCard` | `outdoor_weather_station.*` |
 | `PlantDiagram` | Water loop temps, `plant.target_chw_setpoint` |
