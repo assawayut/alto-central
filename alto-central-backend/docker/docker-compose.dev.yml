@@ -1,0 +1,56 @@
+# Alto Central Backend - Development Docker Compose
+# Use this for local development with hot reload
+
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - LOCAL_DB_URL=postgresql+asyncpg://alto:alto@local-db:5432/alto_local
+      - REDIS_URL=redis://redis:6379/0
+      - ENVIRONMENT=development
+      - DEBUG=true
+      - LOG_LEVEL=DEBUG
+      - CORS_ORIGINS=http://localhost:5173,http://localhost:3000
+    depends_on:
+      local-db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    volumes:
+      # Mount source code for hot reload
+      - ../app:/app/app:ro
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  local-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: alto
+      POSTGRES_PASSWORD: alto
+      POSTGRES_DB: alto_local
+    ports:
+      - "5433:5432"
+    volumes:
+      - local_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U alto -d alto_local"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+
+volumes:
+  local_db_data:
+  redis_data:

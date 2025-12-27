@@ -1,0 +1,52 @@
+# Web Framework
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+python-multipart>=0.0.6
+
+# Database
+sqlalchemy>=2.0.0
+asyncpg>=0.29.0
+alembic>=1.13.0
+supabase>=2.3.0
+
+# Redis & Celery
+redis>=5.0.0
+celery[redis]>=5.3.0
+
+# Data Processing
+pandas>=2.1.0
+numpy>=1.26.0
+polars>=0.20.0
+
+# ML (uncomment when needed)
+scikit-learn>=1.4.0
+# xgboost>=2.0.0
+# torch>=2.1.0
+# mlflow>=2.10.0
+
+# Optimization (uncomment when needed)
+scipy>=1.12.0
+# cvxpy>=1.4.0
+# ortools>=9.8.0
+
+# LLM (uncomment when needed)
+# langchain>=0.1.0
+anthropic>=0.18.0
+# openai>=1.10.0
+
+# Utilities
+httpx>=0.26.0
+pyyaml>=6.0.0
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+python-dotenv>=1.0.0
+
+# Dev dependencies
+pytest>=8.0.0
+pytest-asyncio>=0.23.0
+pytest-cov>=4.1.0
+black>=24.1.0
+ruff>=0.1.0
+mypy>=1.8.0

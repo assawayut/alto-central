@@ -1,0 +1,106 @@
+# Alto Central Backend - Docker Compose
+# This runs the backend API with local PostgreSQL and Redis
+
+version: '3.8'
+
+services:
+  # ==========================================================================
+  # Main API Server
+  # ==========================================================================
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      # External databases (READ-ONLY) - configure these
+      - SUPABASE_URL=${SUPABASE_URL:-}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-}
+      - TIMESCALE_HOST=${TIMESCALE_HOST:-}
+      - TIMESCALE_PORT=${TIMESCALE_PORT:-5432}
+      - TIMESCALE_DB=${TIMESCALE_DB:-}
+      - TIMESCALE_USER=${TIMESCALE_USER:-}
+      - TIMESCALE_PASSWORD=${TIMESCALE_PASSWORD:-}
+      # Local database
+      - LOCAL_DB_URL=postgresql+asyncpg://alto:alto@local-db:5432/alto_local
+      # Redis
+      - REDIS_URL=redis://redis:6379/0
+      # LLM (optional)
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      # App settings
+      - ENVIRONMENT=development
+      - DEBUG=true
+      - LOG_LEVEL=INFO
+      - CORS_ORIGINS=http://localhost:5173,http://localhost:3000
+    depends_on:
+      local-db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+    volumes:
+      - ../ml_artifacts:/app/ml_artifacts
+
+  # ==========================================================================
+  # Celery Worker (for background tasks)
+  # ==========================================================================
+  worker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.worker
+    environment:
+      - SUPABASE_URL=${SUPABASE_URL:-}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-}
+      - TIMESCALE_HOST=${TIMESCALE_HOST:-}
+      - TIMESCALE_PORT=${TIMESCALE_PORT:-5432}
+      - TIMESCALE_DB=${TIMESCALE_DB:-}
+      - TIMESCALE_USER=${TIMESCALE_USER:-}
+      - TIMESCALE_PASSWORD=${TIMESCALE_PASSWORD:-}
+      - LOCAL_DB_URL=postgresql+asyncpg://alto:alto@local-db:5432/alto_local
+      - REDIS_URL=redis://redis:6379/0
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+    depends_on:
+      - local-db
+      - redis
+    restart: unless-stopped
+    volumes:
+      - ../ml_artifacts:/app/ml_artifacts
+    profiles:
+      - full  # Only start with: docker-compose --profile full up
+
+  # ==========================================================================
+  # Local PostgreSQL (for app data - ML models, cache, chat)
+  # ==========================================================================
+  local-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: alto
+      POSTGRES_PASSWORD: alto
+      POSTGRES_DB: alto_local
+    ports:
+      - "5433:5432"  # Use 5433 to avoid conflict with local postgres
+    volumes:
+      - local_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U alto -d alto_local"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ==========================================================================
+  # Redis (for caching and task queue)
+  # ==========================================================================
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+
+volumes:
+  local_db_data:
+  redis_data:
