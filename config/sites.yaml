@@ -1,0 +1,53 @@
+# Alto Central - Site Configuration
+# This file is shared between frontend and backend
+# Add new sites here to have them appear on the map and be available to the system
+
+# Default map settings
+map:
+  center:
+    latitude: 13.7563
+    longitude: 100.5018
+  zoom: 6
+
+# List of all sites
+sites:
+  - site_id: jwmb
+    site_name: JW Marriott Bangkok
+    site_code: JWMB
+    latitude: 13.7432
+    longitude: 100.5489
+    timezone: Asia/Bangkok
+    # Database config (optional - for backend use)
+    # database:
+    #   timescaledb_host: localhost
+    #   timescaledb_port: 5432
+    #   supabase_url: https://xxx.supabase.co
+    #   supabase_anon_key: xxx
+
+  - site_id: shpk
+    site_name: Sheraton Phuket
+    site_code: SHPK
+    latitude: 7.8920
+    longitude: 98.2980
+    timezone: Asia/Bangkok
+
+  - site_id: mrcy
+    site_name: Mercury Tower
+    site_code: MRCY
+    latitude: 13.7290
+    longitude: 100.5670
+    timezone: Asia/Bangkok
+
+  - site_id: ctph
+    site_name: Central Pattaya
+    site_code: CTPH
+    latitude: 12.9236
+    longitude: 100.8825
+    timezone: Asia/Bangkok
+
+  - site_id: hlcm
+    site_name: Hilton Chiang Mai
+    site_code: HLCM
+    latitude: 18.7883
+    longitude: 98.9853
+    timezone: Asia/Bangkok

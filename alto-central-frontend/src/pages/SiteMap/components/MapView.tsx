@@ -1,110 +1,229 @@
-import React from 'react'
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
-import { useNavigate } from 'react-router-dom'
-import L from 'leaflet'
-import type { Site } from '@/types/site'
+import React, { useEffect, useRef, useState } from 'react';
+import maplibregl from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
+import { useNavigate } from 'react-router-dom';
+import { sites, defaultMapCenter, SiteConfig } from '@/config/sites';
 
-// Custom marker icons based on status
-const createMarkerIcon = (status: Site['status']) => {
-  const colors = {
-    active: '#14B8B4',
-    warning: '#FF9F1C',
-    alarm: '#EF4337',
-    offline: '#B4B4B4',
-  }
+// MapTiler API key - you can get a free one at https://www.maptiler.com/
+// For production, move this to environment variables
+const MAPTILER_KEY = 'get_your_own_key';
 
-  return L.divIcon({
-    className: 'custom-marker',
-    html: `
-      <div style="
-        background-color: ${colors[status]};
-        width: 32px;
-        height: 32px;
-        border-radius: 50% 50% 50% 0;
-        transform: rotate(-45deg);
-        border: 3px solid white;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      ">
-        <div style="
-          transform: rotate(45deg);
-          color: white;
-          font-size: 14px;
-        ">🏢</div>
-      </div>
-    `,
-    iconSize: [32, 32],
-    iconAnchor: [16, 32],
-    popupAnchor: [0, -32],
-  })
+// Use OpenStreetMap style if no MapTiler key
+const MAP_STYLE = MAPTILER_KEY === 'get_your_own_key'
+  ? 'https://demotiles.maplibre.org/style.json'
+  : `https://api.maptiler.com/maps/streets-v2/style.json?key=${MAPTILER_KEY}`;
+
+interface SiteMarkerProps {
+  site: SiteConfig;
+  map: maplibregl.Map;
+  onClick: (siteId: string) => void;
 }
 
-interface MapViewProps {
-  sites: Site[]
-}
+// Create a custom marker element
+const createMarkerElement = (site: SiteConfig, onClick: () => void): HTMLElement => {
+  const container = document.createElement('div');
+  container.className = 'site-marker-container';
+  container.style.cssText = `
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    cursor: pointer;
+    transform: translate(-50%, -100%);
+  `;
 
-export function MapView({ sites }: MapViewProps) {
-  const navigate = useNavigate()
+  // Card/Block
+  const card = document.createElement('div');
+  card.className = 'site-marker-card';
+  card.style.cssText = `
+    background: white;
+    border-radius: 8px;
+    padding: 8px 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    min-width: 80px;
+    text-align: center;
+    transition: all 0.2s ease;
+  `;
 
-  // Center on Bangkok
-  const center: [number, number] = [13.7440, 100.5500]
+  // Site code (main label)
+  const codeLabel = document.createElement('div');
+  codeLabel.style.cssText = `
+    font-size: 14px;
+    font-weight: 600;
+    color: #272E3B;
+    margin-bottom: 2px;
+  `;
+  codeLabel.textContent = site.site_code;
+
+  // Site info (sub label)
+  const infoLabel = document.createElement('div');
+  infoLabel.style.cssText = `
+    font-size: 10px;
+    color: #788796;
+  `;
+  // Mock data - in real app this would come from real-time data
+  const mockEquipmentCount = Math.floor(Math.random() * 5) + 1;
+  infoLabel.innerHTML = `EUI 1: <span style="color: #F97316; font-weight: 500;">${Math.floor(Math.random() * 300) + 100}</span>`;
+
+  card.appendChild(codeLabel);
+  card.appendChild(infoLabel);
+
+  // Pin/Dot
+  const pin = document.createElement('div');
+  pin.style.cssText = `
+    width: 8px;
+    height: 8px;
+    background: #F97316;
+    border-radius: 50%;
+    margin-top: 4px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  `;
+
+  // Pin line
+  const line = document.createElement('div');
+  line.style.cssText = `
+    width: 2px;
+    height: 20px;
+    background: #F97316;
+  `;
+
+  container.appendChild(card);
+  container.appendChild(line);
+  container.appendChild(pin);
+
+  // Hover effect
+  container.addEventListener('mouseenter', () => {
+    card.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.2)';
+    card.style.transform = 'scale(1.05)';
+  });
+  container.addEventListener('mouseleave', () => {
+    card.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.15)';
+    card.style.transform = 'scale(1)';
+  });
+
+  // Click handler
+  container.addEventListener('click', onClick);
+
+  return container;
+};
+
+const MapView: React.FC = () => {
+  const mapContainer = useRef<HTMLDivElement>(null);
+  const map = useRef<maplibregl.Map | null>(null);
+  const markersRef = useRef<maplibregl.Marker[]>([]);
+  const navigate = useNavigate();
+  const [mapLoaded, setMapLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!mapContainer.current || map.current) return;
+
+    // Initialize map
+    map.current = new maplibregl.Map({
+      container: mapContainer.current,
+      style: MAP_STYLE,
+      center: [defaultMapCenter.longitude, defaultMapCenter.latitude],
+      zoom: defaultMapCenter.zoom,
+      attributionControl: true,
+    });
+
+    // Add navigation controls
+    map.current.addControl(
+      new maplibregl.NavigationControl({
+        visualizePitch: true,
+      }),
+      'top-right'
+    );
+
+    // Add fullscreen control
+    map.current.addControl(
+      new maplibregl.FullscreenControl(),
+      'top-right'
+    );
+
+    map.current.on('load', () => {
+      setMapLoaded(true);
+    });
+
+    return () => {
+      // Cleanup markers
+      markersRef.current.forEach(marker => marker.remove());
+      markersRef.current = [];
+
+      if (map.current) {
+        map.current.remove();
+        map.current = null;
+      }
+    };
+  }, []);
+
+  // Add markers when map is loaded
+  useEffect(() => {
+    if (!mapLoaded || !map.current) return;
+
+    // Clear existing markers
+    markersRef.current.forEach(marker => marker.remove());
+    markersRef.current = [];
+
+    // Add markers for each site
+    sites.forEach(site => {
+      const markerElement = createMarkerElement(site, () => {
+        navigate(`/site/${site.site_id}`);
+      });
+
+      const marker = new maplibregl.Marker({
+        element: markerElement,
+        anchor: 'bottom',
+      })
+        .setLngLat([site.longitude, site.latitude])
+        .addTo(map.current!);
+
+      markersRef.current.push(marker);
+    });
+
+    // Fit bounds to show all markers
+    if (sites.length > 1) {
+      const bounds = new maplibregl.LngLatBounds();
+      sites.forEach(site => {
+        bounds.extend([site.longitude, site.latitude]);
+      });
+      map.current.fitBounds(bounds, {
+        padding: 80,
+        maxZoom: 10,
+      });
+    }
+  }, [mapLoaded, navigate]);
 
   return (
-    <div className="h-[500px] rounded-lg overflow-hidden alto-card">
-      <MapContainer
-        center={center}
-        zoom={13}
-        scrollWheelZoom={true}
-        style={{ height: '100%', width: '100%' }}
-      >
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
-        {sites.map((site) => (
-          <Marker
-            key={site.id}
-            position={[site.location.lat, site.location.lng]}
-            icon={createMarkerIcon(site.status)}
-            eventHandlers={{
-              click: () => navigate(`/site/${site.id}`),
-            }}
-          >
-            <Popup>
-              <div className="p-2 min-w-[200px]">
-                <h3 className="font-semibold text-foreground mb-1">{site.name}</h3>
-                <p className="text-xs text-muted mb-2">{site.address}</p>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div>
-                    <span className="text-muted">Chillers:</span>{' '}
-                    <span className="font-medium">{site.chillerCount}</span>
-                  </div>
-                  <div>
-                    <span className="text-muted">Efficiency:</span>{' '}
-                    <span className="font-medium">{site.efficiency.toFixed(2)} kW/RT</span>
-                  </div>
-                  <div>
-                    <span className="text-muted">Power:</span>{' '}
-                    <span className="font-medium">{site.power} kW</span>
-                  </div>
-                  <div>
-                    <span className="text-muted">Load:</span>{' '}
-                    <span className="font-medium">{site.coolingLoad} RT</span>
-                  </div>
-                </div>
-                <button
-                  onClick={() => navigate(`/site/${site.id}`)}
-                  className="mt-3 w-full bg-primary text-white text-xs py-1.5 rounded-md hover:bg-primary-dark transition-colors"
-                >
-                  View Dashboard
-                </button>
-              </div>
-            </Popup>
-          </Marker>
-        ))}
-      </MapContainer>
+    <div className="relative w-full h-full">
+      <div ref={mapContainer} className="w-full h-full rounded-lg overflow-hidden" />
+
+      {/* Loading overlay */}
+      {!mapLoaded && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-100 rounded-lg">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+            <p className="text-sm text-gray-500">Loading map...</p>
+          </div>
+        </div>
+      )}
+
+      {/* Attribution styling */}
+      <style>{`
+        .maplibregl-ctrl-attrib {
+          font-size: 10px;
+          background: rgba(255, 255, 255, 0.8) !important;
+        }
+        .maplibregl-ctrl-group {
+          background: white;
+          border-radius: 8px;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+        .maplibregl-ctrl-group button {
+          width: 32px;
+          height: 32px;
+        }
+      `}</style>
     </div>
-  )
-}
+  );
+};
+
+export default MapView;

@@ -2,17 +2,17 @@ import React from 'react'
 import { Building2, Zap, Activity, MapPin } from 'lucide-react'
 import { PageLayout } from '@/components/layout/PageLayout'
 import { Card } from '@/components/ui/card'
-import { MapView } from './components/MapView'
+import MapView from './components/MapView'
 import { BuildingCard } from './components/BuildingCard'
-import { mockSites } from '@/data/mockData'
+import { sites } from '@/config/sites'
 
 export function SiteMap() {
-  // Calculate overview stats
+  // Calculate overview stats (mock data - in real app this would come from API)
   const overview = {
-    totalSites: mockSites.length,
-    activeSites: mockSites.filter(s => s.status === 'active').length,
-    totalPower: mockSites.reduce((sum, s) => sum + s.power, 0),
-    avgEfficiency: mockSites.reduce((sum, s) => sum + s.efficiency, 0) / mockSites.length,
+    totalSites: sites.length,
+    activeSites: sites.length, // Assume all active for now
+    totalPower: sites.length * 85, // Mock: ~85kW average per site
+    avgEfficiency: 0.72,
   }
 
   return (
@@ -69,16 +69,16 @@ export function SiteMap() {
       </div>
 
       {/* Map */}
-      <div className="mb-6">
-        <MapView sites={mockSites} />
+      <div className="mb-6 h-[500px]">
+        <MapView />
       </div>
 
       {/* Site Cards */}
       <div>
         <h2 className="text-lg font-semibold text-foreground mb-4">All Sites</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {mockSites.map((site) => (
-            <BuildingCard key={site.id} site={site} />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {sites.map((site) => (
+            <BuildingCard key={site.site_id} site={site} />
           ))}
         </div>
       </div>

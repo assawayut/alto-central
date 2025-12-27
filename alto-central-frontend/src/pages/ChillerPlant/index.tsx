@@ -10,17 +10,17 @@ import WeatherStationCard from './components/WeatherStationCard'
 import PlantEquipmentCard from './components/PlantEquipmentCard'
 import PlantDiagram from './components/PlantDiagram'
 import UpcomingEventsCard from './components/UpcomingEventsCard'
-import { mockSites } from '@/data/mockData'
+import { getSiteById, sites } from '@/config/sites'
 
 export function ChillerPlant() {
   const { siteId } = useParams<{ siteId: string }>()
 
-  // Find site info
-  const site = mockSites.find(s => s.id === siteId) || mockSites[0]
+  // Find site info from config
+  const site = getSiteById(siteId || '') || sites[0]
 
   return (
     <PageLayout
-      title={site.name}
+      title={site.site_name}
       subtitle="Chiller Plant"
       showBack
       backTo="/"
