@@ -1,0 +1,317 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Modern shimmer animation for skeleton loaders */
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.shimmer-animation {
+  animation: shimmer 2s infinite linear;
+}
+
+/* Text shimmer animation using background position */
+@keyframes text-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+/* White tooltip styling for room grid */
+.white-tooltip .ant-tooltip-content {
+  background-color: transparent !important;
+}
+
+.white-tooltip .ant-tooltip-inner {
+  background-color: white !important;
+  color: #1f2937 !important;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important;
+  padding: 12px !important;
+  min-width: 180px;
+  border-radius: 8px !important;
+}
+
+.white-tooltip .ant-tooltip-arrow {
+  display: none !important;
+}
+
+@layer base {
+  :root {
+    /* Base colors */
+    --background: 230 100% 99%; /* #F9FAFF */
+    --foreground: 220 6% 37%; /* #595c64 */
+
+    /* Card and popover */
+    --card: 230 50% 95%; /* #eceef9 */
+    --card-foreground: 209 93% 34%; /* #065BA9 */
+    --popover: 0 0% 100%; /* #ffffff */
+    --popover-foreground: 213 89% 47%; /* #0d6de3 */
+
+    /* Primary colors */
+    --primary: 213 89% 47%; /* #0d6de3 */
+    --primary-dark: 211 93% 34%; /* #0654a7 */
+    --primary-foreground: 0 0% 100%; /* #ffffff */
+
+    /* Secondary colors */
+    --secondary: 228 71% 95%; /* #e9edfb */
+    --secondary-foreground: 213 13% 53%; /* #788697 */
+
+    /* Muted colors */
+    --muted: 213 13% 53%; /* #788697 */
+    --muted-foreground: 213 13% 53%; /* #788697 */
+
+    /* Accent colors */
+    --accent: 213 89% 47%; /* #0d6de3 */
+    --accent-foreground: 213 89% 47%; /* #0d6de3 */
+
+    /* Status colors */
+    --success: 178 80% 40%; /* #14b8b2 */
+    --success-foreground: 0 0% 100%; /* #ffffff */
+    --warning: 42 99% 66%; /* #fecb52 */
+    --warning-foreground: 220 6% 37%; /* #595c64 */
+    --danger: 4 85% 57%; /* #ef4134 */
+    --danger-foreground: 0 0% 100%; /* #ffffff */
+    --destructive: 4 85% 57%; /* #ef4134 */
+    --destructive-foreground: 0 0% 100%; /* #ffffff */
+
+    /* Utility colors */
+    --border: 228 71% 95%; /* #e9edfb */
+    --input: 228 71% 95%; /* #e9edfb */
+    --ring: 210 2% 82%; /* #d0d1d2 */
+    --radius: 0.5rem;
+    --chart-1: 12 76% 61%;
+    --chart-2: 173 58% 39%;
+    --chart-3: 197 37% 24%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
+  }
+
+  .dark {
+    --background: 222 47% 11%;
+    --foreground: 213 31% 91%;
+
+    --card: 222 47% 11%;
+    --card-foreground: 213 31% 91%;
+    --popover: 222 47% 11%;
+    --popover-foreground: 213 31% 91%;
+
+    --primary: 213 89% 47%;
+    --primary-dark: 211 93% 34%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 223 47% 11%;
+    --secondary-foreground: 213 31% 91%;
+
+    --muted: 223 47% 11%;
+    --muted-foreground: 215.4 16.3% 56.9%;
+
+    --accent: 213 89% 47%;
+    --accent-foreground: 0 0% 100%;
+
+    --success: 178 80% 40%;
+    --success-foreground: 0 0% 100%;
+    --warning: 42 99% 66%;
+    --warning-foreground: 220 6% 37%;
+    --danger: 4 85% 57%;
+    --danger-foreground: 0 0% 100%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 224.3 76.3% 48%;
+  }
+}
+
+@layer components {
+  .alto-card {
+    @apply bg-white rounded-[12px] border border-[#EDEFF9];
+    box-shadow: 1px 3px 20px rgba(154, 170, 207, 0.10);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+    overscroll-behavior: none;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+    margin: 0;
+    min-width: 320px;
+    min-height: 100vh;
+  }
+  #root {
+    width: 100%;
+    min-height: 100vh;
+  }
+}
+
+/* Logo pulse animation */
+@keyframes pulse {
+  0%, 100% { 
+    opacity: 0.3;
+    transform: scale(1);
+  }
+  50% { 
+    opacity: 0.5;
+    transform: scale(1.05);
+  }
+}
+
+@layer utilities {
+  .text-shadow-lg {
+    text-shadow: 0 0 20px rgba(14, 126, 228, 0.5),
+                 0 0 40px rgba(14, 126, 228, 0.3),
+                 0 0 60px rgba(14, 126, 228, 0.2);
+  }
+
+  .glow-text {
+    text-shadow: 0 0 20px rgba(255, 255, 255, 0.7),
+                 0 0 40px rgba(255, 255, 255, 0.4),
+                 0 0 60px rgba(255, 255, 255, 0.2);
+    font-weight: 400;
+    letter-spacing: 0.02em;
+  }
+}
+
+
+/* Define the shimmer animation */
+@keyframes shimmer {
+  0% { background-position: 200% 0; } /* Start from right */
+  100% { background-position: -200% 0; } /* Move to left */
+}
+
+/* Base shimmer class setup */
+.animate-shimmer {
+  background-size: 200% auto;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent; /* Make original text transparent */
+  animation: shimmer 3s linear infinite;
+}
+
+/* Shimmer for backgrounds (not text) */
+.animate-shimmer-bg {
+  background-size: 200% auto;
+  animation: shimmer 3s linear infinite;
+}
+
+/* Specific gradient for the ACTIVE card (white shimmer on blue/teal) */
+.shimmer-active {
+  background-image: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.6) 20%, /* Semi-transparent white */
+    rgba(255, 255, 255, 1)   50%, /* Opaque white highlight */
+    rgba(255, 255, 255, 0.6) 80%  /* Semi-transparent white */
+  );
+}
+
+/* Shimmer for active row backgrounds */
+.shimmer-active-bg {
+  background-image: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.1) 20%, /* More visible white */
+    rgba(255, 255, 255, 0.3) 50%, /* Much brighter highlight */
+    rgba(255, 255, 255, 0.1) 80%  /* More visible white */
+  );
+}
+
+.shimmer-active-secondary {
+  background-image: linear-gradient(
+    90deg,
+    rgba(69, 69, 69, 0.2) 20%, /* Semi-transparent dark */
+    rgba(69, 69, 69, 1)   50%, /* Opaque dark highlight */
+    rgba(69, 69, 69, 0.2) 80%  /* Semi-transparent dark */
+  );
+}
+
+/* Specific gradient for the INACTIVE card (primary color shimmer) */
+.shimmer-inactive {
+   background-image: linear-gradient(
+    90deg,
+    hsla(var(--primary), 0.5) 40%, /* Lighter primary (50% opacity) */
+    hsl(var(--primary))       50%, /* Full primary */
+    hsla(var(--primary), 0.5) 60%  /* Lighter primary (50% opacity) */
+  );
+}
+
+/* Wave animation for active autopilot cards */
+@keyframes wave {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(50%);
+  }
+}
+
+/* ===== Zoom Scaling for MonitorControl only ===== */
+.monitor-wrapper {
+  zoom: 0.95; /* default */
+}
+
+@media (min-width: 768px) {
+  .monitor-wrapper {
+    zoom: 0.4;
+  }
+}
+
+@media (min-width: 1024px) {
+  .monitor-wrapper {
+    zoom: 0.55;
+  }
+}
+
+@media (min-width: 1280px) {
+  .monitor-wrapper {
+    zoom: 0.95;
+  }
+}
+
+@media (min-width: 1920px) {
+  .monitor-wrapper {
+    zoom: 1.12;
+  }
+}
+
+@media (min-width: 2560px) {
+  .monitor-wrapper {
+    zoom: 1.5;
+  }
+}
+
+@media (min-width: 3840px) {
+  .monitor-wrapper {
+    zoom: 2.22;
+  }
+}
+
+@media (min-width: 5120px) {
+  .monitor-wrapper {
+    zoom: 3;
+  }
+}
+
+/* Copilot sidebar styles */
+.copilot-sidebar {
+  transition: transform 0.3s ease-in-out;
+}
+
+.copilot-sidebar-open {
+  transform: translateX(0);
+}
+
+.copilot-sidebar-closed {
+  transform: translateX(calc(100% + 8px));
+}
