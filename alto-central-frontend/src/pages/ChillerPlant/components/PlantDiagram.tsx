@@ -1,7 +1,6 @@
 import { useRef, useEffect, useState } from "react";
 import { useRealtime } from '@/features/realtime';
 import { cn } from "@/utils/cn"; // Update the import path to the correct location
-import { entityService, OntologyEntity } from "@/features/ontology";
 
 
 export type ChillerPlantVariant = 'air-cooled' | 'water-cooled';
@@ -296,34 +295,13 @@ const ChillerPlantDiagram = () => {
 
   // Use the real-time context to get plant data
   const { realtimeData, getValue, getUnit } = useRealtime();
-  const [chillers, setChillers] = useState<OntologyEntity[]>([]);
-  
-  // Fetch chillers using ontology API
-  useEffect(() => {
-    const fetchChillers = async () => {
-      try {
-        const waterEntities = await entityService.queryEntities({
-          tag_filter: 'model:chiller',
-          expand: ['tags', 'latest_data']
-        });
-        setChillers(waterEntities);
-      } catch (error) {
-        console.error('Error fetching chillers:', error);
-      }
-    };
-    
-    fetchChillers();
-  }, []);
-  
+
   // Get plant data from the real-time context
   const chr = getValue('chilled_water_loop', 'return_water_temperature');
   const chs = getValue('chilled_water_loop', 'supply_water_temperature');
   
-  // Calculate average setpoint from active chillers
-  const activeChillers = chillers.filter(chiller => getValue(chiller.entity_id, 'status_read') === 1);
-  const chs_sp = activeChillers.length > 0 
-    ? activeChillers.reduce((sum, chiller) => sum + (getValue(chiller.entity_id, 'setpoint_read') || 0), 0) / activeChillers.length
-    : null;
+  // Get target CHW setpoint from plant
+  const chs_sp = getValue('plant', 'target_chw_setpoint');
 
   const flowCHW = getValue('chilled_water_loop', 'flow_rate');
   const flowCDW = getValue('condenser_water_loop', 'flow_rate');

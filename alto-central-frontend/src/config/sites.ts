@@ -20,6 +20,9 @@ export interface SiteConfig {
   // Optional fields
   ip?: string;
   timezone?: string;
+  hvac_type?: string;  // e.g., water, air, both, water_air_integration, hotel, wholesale
+  building_type?: string;
+  design_capacity_rt?: number;  // Design cooling capacity in RT for part-load calculation
 
   // Database config (for backend use)
   database?: {

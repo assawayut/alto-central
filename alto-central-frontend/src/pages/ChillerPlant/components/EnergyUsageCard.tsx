@@ -1,5 +1,23 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
 import { useRealtime } from '@/features/realtime';
+import { API_ENDPOINTS } from '@/config/api';
+import { getSiteById } from '@/config/sites';
+
+interface EnergyDailyResponse {
+  site_id: string;
+  yesterday: {
+    total: number | null;
+    plant: number | null;
+    air_side: number | null;
+  };
+  today: {
+    total: number | null;
+    plant: number | null;
+    air_side: number | null;
+  };
+  unit: string;
+}
 
 interface DayColumnProps {
   title: string;
@@ -8,12 +26,13 @@ interface DayColumnProps {
   airSide: number | null;
   dbt: number | null;
   rh: number | null;
+  showAirSide: boolean;
 }
 
-const DayColumn: React.FC<DayColumnProps> = ({ title, total, plant, airSide, dbt, rh }) => {
+const DayColumn: React.FC<DayColumnProps> = ({ title, total, plant, airSide, dbt, rh, showAirSide }) => {
   const formatValue = (value: number | null) => {
-    if (value === null || value === undefined || isNaN(value)) return 'NaN';
-    return value.toLocaleString();
+    if (value === null || value === undefined || isNaN(value)) return '-';
+    return value.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
   };
 
   return (
@@ -37,13 +56,15 @@ const DayColumn: React.FC<DayColumnProps> = ({ title, total, plant, airSide, dbt
           </div>
         </div>
 
-        <div className="flex justify-between items-center">
-          <span className="text-[#0E7EE4] text-xs">Air-Side</span>
-          <div className="flex items-baseline gap-1">
-            <span className="text-[#272E3B] text-sm font-semibold">{formatValue(airSide)}</span>
-            <span className="text-[#788796] text-[10px]">kWh</span>
+        {showAirSide && (
+          <div className="flex justify-between items-center">
+            <span className="text-[#0E7EE4] text-xs">Air-Side</span>
+            <div className="flex items-baseline gap-1">
+              <span className="text-[#272E3B] text-sm font-semibold">{formatValue(airSide)}</span>
+              <span className="text-[#788796] text-[10px]">kWh</span>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* DBT and RH */}
@@ -66,22 +87,45 @@ const DayColumn: React.FC<DayColumnProps> = ({ title, total, plant, airSide, dbt
 };
 
 const EnergyUsageCard: React.FC = () => {
+  const { siteId } = useParams<{ siteId: string }>();
   const { getValue } = useRealtime();
+  const [energyData, setEnergyData] = useState<EnergyDailyResponse | null>(null);
 
-  // Mock data for energy usage - in real implementation, this would come from timeseries API
-  // Yesterday values (mock)
-  const yesterdayTotal = 2930;
-  const yesterdayPlant = 2930;
-  const yesterdayAirSide = 0;
-  const yesterdayDBT = 85.3;
-  const yesterdayRH = 55.4;
+  // Get site config to check hvac_type
+  const site = getSiteById(siteId || '');
+  const showAirSide = site?.hvac_type !== 'water';
 
-  // Today values - use real-time data where available
-  const todayPlant = 844;
-  const todayAirSide = getValue('air_distribution_system', 'power') as number || null;
-  const todayTotal = todayPlant + (todayAirSide || 0);
-  const todayDBT = getValue('outdoor_weather_station', 'drybulb_temperature') as number;
-  const todayRH = getValue('outdoor_weather_station', 'humidity') as number;
+  useEffect(() => {
+    if (!siteId) return;
+
+    const fetchEnergy = async () => {
+      try {
+        const response = await fetch(API_ENDPOINTS.energyDaily(siteId));
+        if (response.ok) {
+          const data = await response.json();
+          setEnergyData(data);
+        }
+      } catch (err) {
+        console.error('Failed to fetch energy data:', err);
+      }
+    };
+
+    fetchEnergy();
+  }, [siteId]);
+
+  // Yesterday values from API
+  const yesterdayTotal = energyData?.yesterday?.total ?? null;
+  const yesterdayPlant = energyData?.yesterday?.plant ?? null;
+  const yesterdayAirSide = energyData?.yesterday?.air_side ?? null;
+
+  // Today values from API
+  const todayTotal = energyData?.today?.total ?? null;
+  const todayPlant = energyData?.today?.plant ?? null;
+  const todayAirSide = energyData?.today?.air_side ?? null;
+
+  // Weather from real-time data
+  const todayDBT = getValue('outdoor_weather_station', 'drybulb_temperature') as number ?? null;
+  const todayRH = getValue('outdoor_weather_station', 'humidity') as number ?? null;
 
   return (
     <div className="p-3 alto-card">
@@ -93,8 +137,9 @@ const EnergyUsageCard: React.FC = () => {
           total={yesterdayTotal}
           plant={yesterdayPlant}
           airSide={yesterdayAirSide}
-          dbt={yesterdayDBT}
-          rh={yesterdayRH}
+          dbt={null}
+          rh={null}
+          showAirSide={showAirSide}
         />
 
         <div className="w-px bg-gray-200" />
@@ -106,6 +151,7 @@ const EnergyUsageCard: React.FC = () => {
           airSide={todayAirSide}
           dbt={todayDBT}
           rh={todayRH}
+          showAirSide={showAirSide}
         />
       </div>
     </div>

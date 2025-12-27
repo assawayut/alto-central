@@ -6,149 +6,107 @@ import PlantEquipmentModal from "./PlantEquipmentModal";
 import { RiArrowRightSLine } from "react-icons/ri";
 import { useDevice } from '@/contexts/DeviceContext';
 import { useRealtime } from '@/features/realtime';
-import { OntologyEntity } from '@/features/ontology';
-import { useOntologyEntities } from '@/features/ontology';
-
-// Water-side entity interface
-interface WaterSideEntity extends OntologyEntity {
-  equipmentType: string;
-  status: 'normal' | 'off' | 'warning' | 'alarm';
-}
 
 interface EquipmentTypeInfo {
   code: string;
   name: string;
-  model: string;
-  tag: string; // ontology tag to query
+  prefix: string;  // Device ID prefix to match (e.g., 'chiller_', 'pchp_')
+  image: string;
 }
 
-// Utility functions moved outside component to avoid hoisting issues
-const getEquipmentType = (entity: OntologyEntity): string => {
-  if (!entity.tags || !entity.tags.model) return 'unknown';
-  return String(entity.tags.model);
-};
-
-// Extract all numbers after the prefix and join with "-"
-const getDeviceNumber = (entityId: string): string => {
-  const matches = entityId.match(/\d+/g);
-  return matches ? matches.join('-') : entityId;
-};
-
-const getEquipmentStatus = (entity: OntologyEntity): 'normal' | 'off' | 'warning' | 'alarm' => {
-  const statusData = entity.latest_data?.status_read;
-  if (!statusData || statusData.is_stale) {
-    return 'off';
-  }
-
-  const statusValue = Number(statusData.value);
-  const alarmData = entity.latest_data?.alarm;
-  
-  if (alarmData && Number(alarmData.value) === 1) {
-    return 'alarm';
-  }
-  
-  if (statusValue === 1) {
-    return 'normal';
-  }
-  
-  return 'off';
-};
+interface EquipmentDevice {
+  deviceId: string;
+  number: string;
+  status: 'running' | 'standby' | 'alarm';
+}
 
 const PlantEquipmentCard: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const { isDeviceUnderMaintenance } = useDevice();
-  const { getValue } = useRealtime();
-
-  // Fetch water-side equipment using ontology hook
-  const { entities: waterEntities, loading: isLoading } = useOntologyEntities({
-    tag_filter: 'spaceRef:plant',
-    expand: ['tags', 'latest_data']
-  });
+  const { devices, getValue, isLoading } = useRealtime();
 
   const equipmentTypes: EquipmentTypeInfo[] = [
-    { code: 'CH', name: 'Chiller', model: 'chiller', tag: 'chiller' },
-    { code: 'PCHP', name: 'Primary Chilled Water Pump', model: 'pchp', tag: 'pchp' },
-    { code: 'SCHP', name: 'Secondary Chilled Water Pump', model: 'schp', tag: 'schp' },
-    { code: 'CDP', name: 'Condenser Water Pump', model: 'cdp', tag: 'cdp' },
-    { code: 'CT', name: 'Cooling Tower', model: 'ct', tag: 'ct' },
+    { code: 'CH', name: 'Chiller', prefix: 'chiller_', image: ChillerImage },
+    { code: 'PCHP', name: 'Primary Chilled Water Pump', prefix: 'pchp_', image: PumpImage },
+    { code: 'SCHP', name: 'Secondary Chilled Water Pump', prefix: 'schp_', image: PumpImage },
+    { code: 'CDP', name: 'Condenser Water Pump', prefix: 'cdp_', image: PumpImage },
+    { code: 'CT', name: 'Cooling Tower', prefix: 'ct_', image: CoolingTowerImage },
   ];
 
-  // Convert water entities to WaterSideEntity format
-  const waterEquipment = useMemo(() => {
-    return waterEntities
-      .map((entity): WaterSideEntity => ({
-        ...entity,
-        equipmentType: getEquipmentType(entity),
-        status: getEquipmentStatus(entity)
-      }));
-  }, [waterEntities]);
+  // Extract equipment from realtime devices
+  const groupedEquipment = useMemo(() => {
+    return equipmentTypes.map(type => {
+      // Find all devices matching this prefix
+      const items: EquipmentDevice[] = Object.keys(devices)
+        .filter(deviceId => deviceId.startsWith(type.prefix))
+        .map(deviceId => {
+          // Extract number from device ID (e.g., 'chiller_1' -> '1')
+          const number = deviceId.replace(type.prefix, '');
 
+          // Get status
+          const statusRead = getValue(deviceId, 'status_read');
+          const alarm = getValue(deviceId, 'alarm');
+
+          let status: 'running' | 'standby' | 'alarm' = 'standby';
+          if (alarm === 1) {
+            status = 'alarm';
+          } else if (statusRead === 1) {
+            status = 'running';
+          }
+
+          return { deviceId, number, status };
+        })
+        .sort((a, b) => {
+          // Sort by number
+          const numA = parseInt(a.number) || 0;
+          const numB = parseInt(b.number) || 0;
+          return numA - numB;
+        });
+
+      return { ...type, items };
+    }).filter(group => group.items.length > 0); // Only show groups with equipment
+  }, [devices, getValue]);
 
   // Function to get status styling
-  const getStatusStyling = (entityId: string) => {
+  const getStatusStyling = (deviceId: string, status: 'running' | 'standby' | 'alarm') => {
     // Check if device is under maintenance
-    if (isDeviceUnderMaintenance(entityId)) {
+    if (isDeviceUnderMaintenance(deviceId)) {
       return {
         bg: 'bg-[#FBDFB2]',
         border: 'border-[#F9C36A]',
         text: 'text-[#FF7A00]',
-        hasBorder: true
+        hasBorder: true,
+        grayscale: true
       };
     }
 
-    // Get status from realtime context
-    const statusRead = getValue(entityId, 'status_read');
-    const alarm = getValue(entityId, 'alarm');
-
-    if (alarm) {
-      return {
-        bg: 'bg-[#F7A19B]',
-        border: 'border-[#EF4337]',
-        text: 'text-[#FFFFFF]',
-        hasBorder: true
-      };
-    }
-
-    switch (statusRead) {
-      case 1:
+    switch (status) {
+      case 'alarm':
+        return {
+          bg: 'bg-[#F7A19B]',
+          border: 'border-[#EF4337]',
+          text: 'text-[#FFFFFF]',
+          hasBorder: true,
+          grayscale: true
+        };
+      case 'running':
         return {
           bg: 'bg-green/50',
           border: 'border-success',
           text: 'text-success',
-          hasBorder: true
+          hasBorder: true,
+          grayscale: false
         };
-      case 0:
+      default: // standby
         return {
           bg: 'bg-[#EDEFF9]',
           border: '',
           text: 'text-[#B4B4B4]',
-          hasBorder: false
-        };
-      default:
-        return {
-          bg: 'bg-[#EDEFF9]',
-          border: '',
-          text: 'text-[#B4B4B4]',
-          hasBorder: false
+          hasBorder: false,
+          grayscale: true
         };
     }
   };
-
-  // Group equipment by type and sort by number
-  const groupedEquipment = equipmentTypes.map(type => {
-    const items = waterEquipment
-      .filter(entity => entity.equipmentType === type.model)
-      .sort((a, b) => {
-        const numA = getDeviceNumber(a.entity_id);
-        const numB = getDeviceNumber(b.entity_id);
-        return numA.localeCompare(numB, undefined, { numeric: true });
-      });
-    
-    return {
-      ...type,
-      items
-    };
-  });
 
   if (isLoading) {
     return (
@@ -177,7 +135,7 @@ const PlantEquipmentCard: React.FC = () => {
           />
         </button>
       </div>
-      
+
       <div className="flex justify-center items-start flex-col gap-1.5 flex-grow">
         {groupedEquipment.map((group) => (
           <div key={group.code} className="flex justify-center items-start flex-col gap-0.5">
@@ -187,28 +145,33 @@ const PlantEquipmentCard: React.FC = () => {
             </div>
             <div className="flex self-stretch justify-start items-center flex-wrap gap-1">
               {group.items.map((device, index) => {
-                const styling = getStatusStyling(device.entity_id);
-                const deviceNumber = getDeviceNumber(device.entity_id) || '-';
+                const styling = getStatusStyling(device.deviceId, device.status);
                 const isNewRow = index > 0 && index % 8 === 0;
-                
+
                 return (
-                  <div 
-                    key={device.entity_id} 
+                  <div
+                    key={device.deviceId}
                     className={`flex justify-center items-center flex-col gap-px pt-0.5 pb-[1px] px-[3px] ${styling.bg} ${styling.hasBorder ? 'border-solid border ' + styling.border : ''} rounded-md w-[33px] ${isNewRow ? 'mt-1' : ''}`}
                   >
-                    <img 
-                      src={group.model === 'chiller' ? ChillerImage : group.model === 'ct' ? CoolingTowerImage : PumpImage} 
-                      className={`w-[28px] h-[21px] object-contain ${styling.text !== 'text-success' && 'grayscale'}`}
+                    <img
+                      src={group.image}
+                      className={`w-[28px] h-[21px] object-contain ${styling.grayscale ? 'grayscale' : ''}`}
                     />
-                    <span className={`${styling.text} text-[10px] text-center font-semibold`}>{deviceNumber}</span>
+                    <span className={`${styling.text} text-[10px] text-center font-semibold`}>{device.number}</span>
                   </div>
                 );
               })}
             </div>
           </div>
         ))}
+
+        {groupedEquipment.length === 0 && (
+          <div className="flex justify-center items-center w-full h-full">
+            <span className="text-muted text-sm">No equipment data</span>
+          </div>
+        )}
       </div>
-      
+
       <div className="flex justify-start items-center flex-row gap-2 mt-[10px]">
         <div className="flex justify-center items-center flex-row gap-1">
           <div className="bg-muted rounded-[100px] w-[6px] h-[6px]" style={{ width: '6px' }}></div>
@@ -229,7 +192,7 @@ const PlantEquipmentCard: React.FC = () => {
       </div>
 
       {/* Plant Equipment Modal */}
-      <PlantEquipmentModal 
+      <PlantEquipmentModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
       />

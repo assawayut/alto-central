@@ -51,6 +51,7 @@ sites:
     timezone: Asia/Bangkok
     hvac_type: water
     building_type: office
+    design_capacity_rt: 3000
     database:
       timescaledb:
         host: 10.144.168.147

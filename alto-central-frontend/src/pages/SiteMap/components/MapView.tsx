@@ -4,14 +4,27 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import { useNavigate } from 'react-router-dom';
 import { sites, defaultMapCenter, SiteConfig } from '@/config/sites';
 
-// MapTiler API key - you can get a free one at https://www.maptiler.com/
-// For production, move this to environment variables
-const MAPTILER_KEY = 'get_your_own_key';
-
-// Use OpenStreetMap style if no MapTiler key
-const MAP_STYLE = MAPTILER_KEY === 'get_your_own_key'
-  ? 'https://demotiles.maplibre.org/style.json'
-  : `https://api.maptiler.com/maps/streets-v2/style.json?key=${MAPTILER_KEY}`;
+// OpenStreetMap-based style (free, no API key required)
+const MAP_STYLE: maplibregl.StyleSpecification = {
+  version: 8,
+  sources: {
+    osm: {
+      type: 'raster',
+      tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+      tileSize: 256,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    },
+  },
+  layers: [
+    {
+      id: 'osm',
+      type: 'raster',
+      source: 'osm',
+      minzoom: 0,
+      maxzoom: 19,
+    },
+  ],
+};
 
 interface SiteMarkerProps {
   site: SiteConfig;
@@ -50,22 +63,10 @@ const createMarkerElement = (site: SiteConfig, onClick: () => void): HTMLElement
     font-size: 14px;
     font-weight: 600;
     color: #272E3B;
-    margin-bottom: 2px;
   `;
   codeLabel.textContent = site.site_code;
 
-  // Site info (sub label)
-  const infoLabel = document.createElement('div');
-  infoLabel.style.cssText = `
-    font-size: 10px;
-    color: #788796;
-  `;
-  // Mock data - in real app this would come from real-time data
-  const mockEquipmentCount = Math.floor(Math.random() * 5) + 1;
-  infoLabel.innerHTML = `EUI 1: <span style="color: #F97316; font-weight: 500;">${Math.floor(Math.random() * 300) + 100}</span>`;
-
   card.appendChild(codeLabel);
-  card.appendChild(infoLabel);
 
   // Pin/Dot
   const pin = document.createElement('div');

@@ -1,6 +1,7 @@
 import React from 'react'
 import { useParams } from 'react-router-dom'
 import { PageLayout } from '@/components/layout/PageLayout'
+import { RealtimeProvider } from '@/features/realtime'
 import EnergyUsageCard from './components/EnergyUsageCard'
 import BuildingLoadGraph from './components/BuildingLoadGraph'
 import SystemAlertCard from './components/SystemAlertCard'
@@ -12,11 +13,12 @@ import PlantDiagram from './components/PlantDiagram'
 import UpcomingEventsCard from './components/UpcomingEventsCard'
 import { getSiteById, sites } from '@/config/sites'
 
-export function ChillerPlant() {
+function ChillerPlantContent() {
   const { siteId } = useParams<{ siteId: string }>()
 
   // Find site info from config
   const site = getSiteById(siteId || '') || sites[0]
+  const showAirSideTab = site?.hvac_type !== 'water'
 
   return (
     <PageLayout
@@ -31,9 +33,11 @@ export function ChillerPlant() {
           <button className="px-4 py-2 text-sm font-medium bg-primary text-white rounded-md">
             Water-Side
           </button>
-          <button className="px-4 py-2 text-sm font-medium text-muted hover:text-foreground rounded-md">
-            Air-Side
-          </button>
+          {showAirSideTab && (
+            <button className="px-4 py-2 text-sm font-medium text-muted hover:text-foreground rounded-md">
+              Air-Side
+            </button>
+          )}
         </div>
       </div>
 
@@ -87,5 +91,13 @@ export function ChillerPlant() {
         </div>
       </div>
     </PageLayout>
+  )
+}
+
+export function ChillerPlant() {
+  return (
+    <RealtimeProvider>
+      <ChillerPlantContent />
+    </RealtimeProvider>
   )
 }

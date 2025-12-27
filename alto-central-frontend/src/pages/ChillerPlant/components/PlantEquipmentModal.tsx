@@ -2,8 +2,6 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useRealtime } from '@/features/realtime';
 import { useDevice } from '@/contexts/DeviceContext';
 import { cn } from '@/utils/cn';
-import { OntologyEntity } from '@/features/ontology';
-import { useOntologyEntities } from '@/features/ontology';
 import {
   Table,
   TableBody,
@@ -12,12 +10,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-
-// Water-side entity interface
-interface WaterSideEntity extends OntologyEntity {
-  equipmentType: string;
-  status: 'normal' | 'off' | 'warning' | 'alarm';
-}
 
 interface StatusIndicatorProps {
   status: 'running' | 'standby' | 'alarm' | 'under_maintenance';
@@ -77,30 +69,43 @@ const StatusIndicator: React.FC<StatusIndicatorProps> = ({ status }) => {
   );
 };
 
+interface EquipmentDevice {
+  deviceId: string;
+  number: string;
+}
+
 interface EquipmentSectionProps {
   title: string;
   efficiency: number;
   model: string;
-  devices: any[];
+  devices: EquipmentDevice[];
 }
 
 const EquipmentSection: React.FC<EquipmentSectionProps> = ({ title, efficiency, model, devices }) => {
   const { getValue } = useRealtime();
   const { isDeviceUnderMaintenance } = useDevice();
 
-  const getDeviceStatus = (entityId: string): StatusIndicatorProps['status'] => {
-    if (isDeviceUnderMaintenance(entityId)) {
+  const getDeviceStatus = (deviceId: string): StatusIndicatorProps['status'] => {
+    if (isDeviceUnderMaintenance(deviceId)) {
       return 'under_maintenance';
     }
-    
-    const alarm = getValue(entityId, 'alarm');
-    if (alarm) {
+
+    const alarm = getValue(deviceId, 'alarm');
+    if (alarm === 1) {
       return 'alarm';
     }
 
-    const statusRead = getValue(entityId, 'status_read');
+    const statusRead = getValue(deviceId, 'status_read');
     return (statusRead === 1) ? 'running' : 'standby';
   };
+
+  const formatValue = (value: number | string | undefined): string => {
+    if (value === undefined || value === null) return '-';
+    if (typeof value === 'number') return value.toFixed(1);
+    return String(value);
+  };
+
+  if (devices.length === 0) return null;
 
   return (
     <div className="flex self-stretch justify-start items-start flex-col gap-1.5 pt-1">
@@ -111,7 +116,7 @@ const EquipmentSection: React.FC<EquipmentSectionProps> = ({ title, efficiency, 
           <span className="text-[#6B7280] text-[9px] text-center">kW/Ton</span>
         </div>
       </div>
-      
+
       <div className="w-full rounded-md overflow-hidden">
         <Table>
           <TableHeader>
@@ -121,6 +126,7 @@ const EquipmentSection: React.FC<EquipmentSectionProps> = ({ title, efficiency, 
                   <TableHead className="h-[32px] text-[#788796] text-[9px] font-normal py-1 px-2 text-left">Device Name</TableHead>
                   <TableHead className="h-[32px] text-[#788796] text-[9px] font-normal py-1 px-2 text-left">Status</TableHead>
                   <TableHead className="h-[32px] text-[#788796] text-[9px] font-normal py-1 px-2 text-left">Power (kW)</TableHead>
+                  <TableHead className="h-[32px] text-[#788796] text-[9px] font-normal py-1 px-2 text-left">RLA (%)</TableHead>
                   <TableHead className="h-[32px] text-[#788796] text-[9px] font-normal py-1 px-2 text-left">Efficiency</TableHead>
                   <TableHead className="h-[32px] text-[#788796] text-[9px] font-normal py-1 px-2 text-left">Setpoint(°F)</TableHead>
                   <TableHead className="h-[32px] text-[#788796] text-[9px] font-normal py-1 px-2 text-left">CHS (°F)</TableHead>
@@ -140,40 +146,49 @@ const EquipmentSection: React.FC<EquipmentSectionProps> = ({ title, efficiency, 
           </TableHeader>
           <TableBody>
             {devices.map((device) => {
-              const status = getDeviceStatus(device.entity_id);
-              
+              const status = getDeviceStatus(device.deviceId);
+
               if (model === 'chiller') {
-                const power = getValue(device.entity_id, 'power');
-                const deviceEfficiency = getValue(device.entity_id, 'efficiency');
-                const setpoint = getValue(device.entity_id, 'setpoint_read');
-                const chs = getValue(device.entity_id, 'evap_leaving_water_temperature');
-                const chr = getValue(device.entity_id, 'evap_entering_water_temperature');
-                const cdr = getValue(device.entity_id, 'cond_entering_water_temperature');
-                const cds = getValue(device.entity_id, 'cond_leaving_water_temperature');
-                
+                const power = getValue(device.deviceId, 'power');
+                const rla = getValue(device.deviceId, 'percentage_rla');
+                const deviceEfficiency = getValue(device.deviceId, 'efficiency');
+                const setpoint = getValue(device.deviceId, 'setpoint_read');
+                const chs = getValue(device.deviceId, 'evap_leaving_water_temperature');
+                const chr = getValue(device.deviceId, 'evap_entering_water_temperature');
+                const cdr = getValue(device.deviceId, 'cond_entering_water_temperature');
+                const cds = getValue(device.deviceId, 'cond_leaving_water_temperature');
+
                 return (
-                  <TableRow key={device.entity_id} className="bg-[#F9FAFF] border-[#EDEFF9]">
-                    <TableCell className="h-[32px] text-[#212529] text-[9px] py-1 px-2 text-left">{device.entity_id.replace('chiller_', 'CH-')}</TableCell>
+                  <TableRow key={device.deviceId} className="bg-[#F9FAFF] border-[#EDEFF9]">
+                    <TableCell className="h-[32px] text-[#212529] text-[9px] py-1 px-2 text-left">CH-{device.number}</TableCell>
                     <TableCell className="h-[32px] py-1 px-2 text-left flex justify-start"><StatusIndicator status={status} /></TableCell>
-                    <TableCell className="h-[32px] text-[#212529] text-[9px] py-1 px-2 text-left">{power === undefined ? "-" : power.toFixed(1)}</TableCell>
-                    <TableCell className="h-[32px] text-[#212529] text-[9px] py-1 px-2 text-left">{deviceEfficiency === undefined ? "-" : deviceEfficiency.toFixed(3)}</TableCell>
-                    <TableCell className="h-[32px] text-[#212529] text-[9px] py-1 px-2 text-left">{setpoint === undefined ? "-" : `${setpoint.toFixed(1)}`}</TableCell>
-                    <TableCell className="h-[32px] text-[#212529] text-[9px] py-1 px-2 text-left">{chs === undefined ? "-" : `${chs.toFixed(1)}`}</TableCell>
-                    <TableCell className="h-[32px] text-[#212529] text-[9px] py-1 px-2 text-left">{chr === undefined ? "-" : `${chr.toFixed(1)}`}</TableCell>
-                    <TableCell className="h-[32px] text-[#212529] text-[9px] py-1 px-2 text-left">{cdr === undefined ? "-" : `${cdr.toFixed(1)}`}</TableCell>
-                    <TableCell className="h-[32px] text-[#212529] text-[9px] py-1 px-2 text-left">{cds === undefined ? "-" : `${cds.toFixed(1)}`}</TableCell>
+                    <TableCell className="h-[32px] text-[#212529] text-[9px] py-1 px-2 text-left">{formatValue(power as number)}</TableCell>
+                    <TableCell className="h-[32px] text-[#212529] text-[9px] py-1 px-2 text-left">{formatValue(rla as number)}</TableCell>
+                    <TableCell className="h-[32px] text-[#212529] text-[9px] py-1 px-2 text-left">{deviceEfficiency !== undefined ? (deviceEfficiency as number).toFixed(3) : '-'}</TableCell>
+                    <TableCell className="h-[32px] text-[#212529] text-[9px] py-1 px-2 text-left">{formatValue(setpoint as number)}</TableCell>
+                    <TableCell className="h-[32px] text-[#212529] text-[9px] py-1 px-2 text-left">{formatValue(chs as number)}</TableCell>
+                    <TableCell className="h-[32px] text-[#212529] text-[9px] py-1 px-2 text-left">{formatValue(chr as number)}</TableCell>
+                    <TableCell className="h-[32px] text-[#212529] text-[9px] py-1 px-2 text-left">{formatValue(cdr as number)}</TableCell>
+                    <TableCell className="h-[32px] text-[#212529] text-[9px] py-1 px-2 text-left">{formatValue(cds as number)}</TableCell>
                   </TableRow>
                 );
               } else {
-                const power = getValue(device.entity_id, 'power') || 0;
-                const frequency = getValue(device.entity_id, 'frequency_read') || 0;
-                
+                const power = getValue(device.deviceId, 'power');
+                const frequency = getValue(device.deviceId, 'frequency_read');
+
+                // Format display name based on equipment type
+                let displayName = device.deviceId.replace(/_/g, '-').toUpperCase();
+                if (model === 'pchp') displayName = `PCHP-${device.number}`;
+                if (model === 'schp') displayName = `SCHP-${device.number}`;
+                if (model === 'cdp') displayName = `CDP-${device.number}`;
+                if (model === 'ct') displayName = `CT-${device.number}`;
+
                 return (
-                  <TableRow key={device.entity_id} className="bg-[#F9FAFF] border-[#EDEFF9]">
-                    <TableCell className="h-[32px] text-[#212529] text-[9px] py-1 px-2 text-left">{device.entity_id.replace(/_/g, '-').toUpperCase()}</TableCell>
+                  <TableRow key={device.deviceId} className="bg-[#F9FAFF] border-[#EDEFF9]">
+                    <TableCell className="h-[32px] text-[#212529] text-[9px] py-1 px-2 text-left">{displayName}</TableCell>
                     <TableCell className="h-[32px] py-1 px-2 text-left flex justify-start"><StatusIndicator status={status} /></TableCell>
-                    <TableCell className="h-[32px] text-[#212529] text-[9px] py-1 px-2 text-left">{power === undefined ? "-" : power.toFixed(1)}</TableCell>
-                    <TableCell className="h-[32px] text-[#212529] text-[9px] py-1 px-2 text-left">{frequency === undefined ? "-" : frequency.toFixed(1)}</TableCell>
+                    <TableCell className="h-[32px] text-[#212529] text-[9px] py-1 px-2 text-left">{formatValue(power as number)}</TableCell>
+                    <TableCell className="h-[32px] text-[#212529] text-[9px] py-1 px-2 text-left">{formatValue(frequency as number)}</TableCell>
                   </TableRow>
                 );
               }
@@ -190,79 +205,47 @@ interface PlantEquipmentModalProps {
   onClose: () => void;
 }
 
-// Utility functions moved outside component to avoid hoisting issues
-const getEquipmentType = (tags?: Record<string, any>): string => {
-  if (!tags) return 'unknown';
-  if (tags.model === 'chiller') return 'chiller';
-  if (tags.model === 'pchp') return 'pchp';
-  if (tags.model === 'schp') return 'pchp';
-  if (tags.model === 'cdp') return 'cdp';
-  if (tags.model === 'ct') return 'ct';
-  return 'unknown';
-};
-
-const getEquipmentStatus = (entity: OntologyEntity): 'normal' | 'off' | 'warning' | 'alarm' => {
-  const statusData = entity.latest_data?.status_read;
-  if (!statusData || statusData.is_stale) {
-    return 'off';
-  }
-
-  const statusValue = Number(statusData.value);
-  const alarmData = entity.latest_data?.alarm;
-  
-  if (alarmData && Number(alarmData.value) === 1) {
-    return 'alarm';
-  }
-  
-  if (statusValue === 1) {
-    return 'normal';
-  }
-  
-  return 'off';
-};
-
 const PlantEquipmentModal: React.FC<PlantEquipmentModalProps> = ({ isOpen, onClose }) => {
-  const { getValue } = useRealtime();
+  const { devices, getValue } = useRealtime();
   const [isVisible, setIsVisible] = useState(false);
   const [shouldRender, setShouldRender] = useState(isOpen);
 
-  // Fetch water-side equipment using ontology hook
-  const { entities: waterEntities, loading: isLoading } = useOntologyEntities({
-    tag_filter: 'spaceRef:plant',
-    expand: ['tags', 'latest_data']
-  });
-  
-  // Convert water entities to WaterSideEntity format
-  const waterEquipment = useMemo(() => {
-    return waterEntities.map((entity): WaterSideEntity => ({
-      ...entity,
-      equipmentType: getEquipmentType(entity.tags),
-      status: getEquipmentStatus(entity)
-    }));
-  }, [waterEntities]);
+  // Extract equipment from realtime devices
+  const equipmentByType = useMemo(() => {
+    const types = [
+      { model: 'chiller', prefix: 'chiller_' },
+      { model: 'pchp', prefix: 'pchp_' },
+      { model: 'schp', prefix: 'schp_' },
+      { model: 'cdp', prefix: 'cdp_' },
+      { model: 'ct', prefix: 'ct_' },
+    ];
 
+    const result: Record<string, EquipmentDevice[]> = {};
 
-  // Group equipment by type
-  const devicesByType = {
-    'chiller': waterEquipment.filter(e => e.equipmentType === 'chiller'),
-    'pchp': waterEquipment.filter(e => e.equipmentType === 'pchp'),
-    'cdp': waterEquipment.filter(e => e.equipmentType === 'cdp'),
-    'ct': waterEquipment.filter(e => e.equipmentType === 'ct')
-  };
-  
-  // Get plant cooling rate for efficiency calculations
-  const coolingRate = getValue('plant', 'cooling_rate');
-  
-  // Calculate efficiencies using plant-level aggregated power values
-  const powerAllChillers = getValue('plant', 'power_all_chillers');
-  const powerAllPCHPs = getValue('plant', 'power_all_pchps');
-  const powerAllCDPs = getValue('plant', 'power_all_cdps');
-  const powerAllCTs = getValue('plant', 'power_all_cts');
+    types.forEach(type => {
+      result[type.model] = Object.keys(devices)
+        .filter(deviceId => deviceId.startsWith(type.prefix))
+        .map(deviceId => ({
+          deviceId,
+          number: deviceId.replace(type.prefix, '')
+        }))
+        .sort((a, b) => {
+          const numA = parseInt(a.number) || 0;
+          const numB = parseInt(b.number) || 0;
+          return numA - numB;
+        });
+    });
 
-  const plantEfficiency = coolingRate > 0 && powerAllChillers != null ? powerAllChillers / coolingRate : 0;
-  const pchpEfficiency = coolingRate > 0 && powerAllPCHPs != null ? powerAllPCHPs / coolingRate : 0;
-  const cdpEfficiency = coolingRate > 0 && powerAllCDPs != null ? powerAllCDPs / coolingRate : 0;
-  const coolingTowerEfficiency = coolingRate > 0 && powerAllCTs != null ? powerAllCTs / coolingRate : 0;
+    return result;
+  }, [devices]);
+
+  // Get efficiencies from plant-level datapoints
+  // Support both efficiency_ch and efficiency_chiller naming
+  const chillerEfficiency = (getValue('plant', 'efficiency_ch') ?? getValue('plant', 'efficiency_chiller')) as number || 0;
+  const pchpEfficiency = getValue('plant', 'efficiency_pchp') as number || 0;
+  const schpEfficiency = getValue('plant', 'efficiency_schp') as number || 0;
+  const cdpEfficiency = getValue('plant', 'efficiency_cdp') as number || 0;
+  const ctEfficiency = getValue('plant', 'efficiency_ct') as number || 0;
 
   // Handle opening and closing animations
   useEffect(() => {
@@ -271,14 +254,14 @@ const PlantEquipmentModal: React.FC<PlantEquipmentModalProps> = ({ isOpen, onClo
       const openTimer = setTimeout(() => {
         setIsVisible(true);
       }, 10);
-      
+
       return () => clearTimeout(openTimer);
     } else {
       setIsVisible(false);
       const closeTimer = setTimeout(() => {
         setShouldRender(false);
       }, 300);
-      
+
       return () => clearTimeout(closeTimer);
     }
   }, [isOpen]);
@@ -288,23 +271,23 @@ const PlantEquipmentModal: React.FC<PlantEquipmentModalProps> = ({ isOpen, onClo
   return (
     <>
       {/* Background Overlay */}
-      <div 
+      <div
         className={cn(
           "fixed inset-0 bg-black transition-opacity duration-300 ease-in-out z-[998]",
           isVisible ? "opacity-50" : "opacity-0 pointer-events-none"
         )}
         onClick={onClose}
       />
-      
+
       {/* Modal Content */}
-      <div 
+      <div
         className={cn(
           "fixed inset-0 flex items-center justify-center z-[999] p-4 overflow-auto transition-all duration-300 ease-in-out",
           !isVisible && "pointer-events-none"
         )}
         onClick={onClose}
       >
-        <div 
+        <div
           className={cn(
             "flex justify-start items-center flex-col gap-3 p-4 bg-[#F9FAFF] border-solid border-[#DBE4FF] border rounded-xl max-w-5xl w-full max-h-[90vh] overflow-auto transition-all duration-300 ease-in-out",
             isVisible ? "opacity-100 scale-100" : "opacity-0 scale-95 transform"
@@ -325,32 +308,39 @@ const PlantEquipmentModal: React.FC<PlantEquipmentModalProps> = ({ isOpen, onClo
 
           {/* Content */}
           <div className="flex self-stretch justify-start items-start flex-col gap-2 w-full">
-            <EquipmentSection 
-              title="Chiller" 
-              efficiency={plantEfficiency}
+            <EquipmentSection
+              title="Chiller"
+              efficiency={chillerEfficiency}
               model="chiller"
-              devices={devicesByType['chiller'] || []}
+              devices={equipmentByType['chiller'] || []}
             />
-            
-            <EquipmentSection 
-              title="PCHP" 
+
+            <EquipmentSection
+              title="PCHP"
               efficiency={pchpEfficiency}
               model="pchp"
-              devices={devicesByType['pchp'] || []}
+              devices={equipmentByType['pchp'] || []}
             />
-            
-            <EquipmentSection 
-              title="CDP" 
+
+            <EquipmentSection
+              title="SCHP"
+              efficiency={schpEfficiency}
+              model="schp"
+              devices={equipmentByType['schp'] || []}
+            />
+
+            <EquipmentSection
+              title="CDP"
               efficiency={cdpEfficiency}
               model="cdp"
-              devices={devicesByType['cdp'] || []}
+              devices={equipmentByType['cdp'] || []}
             />
-            
-            <EquipmentSection 
-              title="Cooling Tower" 
-              efficiency={coolingTowerEfficiency}
+
+            <EquipmentSection
+              title="Cooling Tower"
+              efficiency={ctEfficiency}
               model="ct"
-              devices={devicesByType['ct'] || []}
+              devices={equipmentByType['ct'] || []}
             />
           </div>
         </div>
@@ -359,4 +349,4 @@ const PlantEquipmentModal: React.FC<PlantEquipmentModalProps> = ({ isOpen, onClo
   );
 };
 
-export default PlantEquipmentModal; 
+export default PlantEquipmentModal;

@@ -11,11 +11,8 @@ export function PowerCard({ deviceId = 'plant' }: PowerCardProps) {
 
   const power = getValue(deviceId, 'power') as number;
   const coolingLoad = getValue(deviceId, 'cooling_rate') as number;
-
-  // Calculate part-load percentage (cooling load / design capacity)
-  // Assuming design capacity of 200 RT for demo
-  const designCapacity = 200;
-  const partLoad = coolingLoad ? (coolingLoad / designCapacity) * 100 : 0;
+  // Part-load comes from API as percentage
+  const partLoad = getValue(deviceId, 'running_capacity') as number ?? 0;
 
   return (
     <div className="w-full h-full alto-card flex items-stretch overflow-hidden bg-background">
