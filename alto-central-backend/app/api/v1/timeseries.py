@@ -4,12 +4,14 @@ These endpoints provide historical timeseries data from TimescaleDB (READ-ONLY).
 Each site can have its own TimescaleDB instance configured in sites.yaml.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Path, Query
 
 from app.db.connections import get_timescale
+from app.config import get_site_by_id
 from app.models.schemas.timeseries import (
     TimeseriesQuery,
     TimeseriesDataPoint,
@@ -97,25 +99,53 @@ async def get_aggregated_data(
     site_id: str = Path(..., description="Site identifier"),
     device_id: str = Query("plant", description="Device identifier"),
     datapoint: str = Query("power", description="Datapoint name"),
-    period: str = Query("24h", description="Time period (24h, 7d, 30d)"),
+    period: str = Query("24h", description="Time period (24h, 7d, 30d, today, yesterday)"),
     aggregation: str = Query("hourly", description="Aggregation level (hourly, daily)"),
 ) -> Dict:
     """Get pre-aggregated timeseries data.
 
     This is optimized for common dashboard queries.
+
+    Period options:
+    - 24h, 7d, 30d: Rolling windows from current time (UTC)
+    - today: From midnight to now in site's local timezone
+    - yesterday: Full previous day in site's local timezone
     """
     # Get site-specific TimescaleDB connection
     timescale = await get_timescale(site_id)
 
-    # Calculate time range
-    now = datetime.utcnow()
-    period_map = {
-        "24h": timedelta(hours=24),
-        "7d": timedelta(days=7),
-        "30d": timedelta(days=30),
-    }
-    delta = period_map.get(period, timedelta(hours=24))
-    start_time = now - delta
+    # Get site config for timezone
+    site = get_site_by_id(site_id)
+    site_tz = ZoneInfo(site.timezone) if site else ZoneInfo("UTC")
+
+    # Calculate time range based on period
+    # Note: Keep timezone info for asyncpg - it handles UTC conversion properly
+    if period == "today":
+        # Today: from midnight in site's timezone to now
+        now_local = datetime.now(site_tz)
+        start_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+        # Convert to UTC for database query (keep tzinfo for asyncpg)
+        start_time = start_local.astimezone(timezone.utc)
+        end_time = now_local.astimezone(timezone.utc)
+    elif period == "yesterday":
+        # Yesterday: full previous day in site's timezone
+        now_local = datetime.now(site_tz)
+        today_start_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+        yesterday_start_local = today_start_local - timedelta(days=1)
+        # Convert to UTC for database query (keep tzinfo for asyncpg)
+        start_time = yesterday_start_local.astimezone(timezone.utc)
+        end_time = today_start_local.astimezone(timezone.utc)
+    else:
+        # Rolling window periods (24h, 7d, 30d)
+        now = datetime.now(timezone.utc)
+        period_map = {
+            "24h": timedelta(hours=24),
+            "7d": timedelta(days=7),
+            "30d": timedelta(days=30),
+        }
+        delta = period_map.get(period, timedelta(hours=24))
+        start_time = now - delta
+        end_time = now
 
     # Determine resample interval
     resample = "1 hour" if aggregation == "hourly" else "1 day"
@@ -125,7 +155,7 @@ async def get_aggregated_data(
         device_id=device_id,
         datapoints=[datapoint],
         start_time=start_time,
-        end_time=now,
+        end_time=end_time,
         resample=resample,
     )
 
