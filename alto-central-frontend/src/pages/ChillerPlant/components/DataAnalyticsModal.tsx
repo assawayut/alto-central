@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import * as echarts from 'echarts';
 import { FiX } from 'react-icons/fi';
+import { API_ENDPOINTS } from '@/config/api';
 
 interface DataPoint {
   timestamp: string;
@@ -10,9 +11,10 @@ interface DataPoint {
   efficiency: number;
   num_chillers: number;
   chiller_combination: string;
-  chs_temp: number;
-  cds_temp: number;
-  outdoor_temp: number;
+  chs: number;
+  cds: number;
+  outdoor_wbt: number;
+  outdoor_dbt: number;
 }
 
 interface DataAnalyticsModalProps {
@@ -30,22 +32,24 @@ const COLORS = [
 const SYMBOLS = ['circle', 'rect', 'triangle', 'diamond', 'pin', 'arrow'];
 
 // Label field options
-type LabelField = 'none' | 'num_chillers' | 'chiller_combination' | 'chs_temp' | 'cds_temp' | 'outdoor_temp';
+type LabelField = 'none' | 'num_chillers' | 'chiller_combination' | 'chs' | 'cds' | 'outdoor_wbt' | 'outdoor_dbt';
 
 const LABEL_OPTIONS: { value: LabelField; label: string; isContinuous: boolean }[] = [
   { value: 'none', label: 'None', isContinuous: false },
   { value: 'num_chillers', label: 'Number of Chillers', isContinuous: false },
   { value: 'chiller_combination', label: 'Chiller Combination', isContinuous: false },
-  { value: 'chs_temp', label: 'CHS Temp (°F)', isContinuous: true },
-  { value: 'cds_temp', label: 'CDS Temp (°F)', isContinuous: true },
-  { value: 'outdoor_temp', label: 'Outdoor Temp (°F)', isContinuous: true },
+  { value: 'chs', label: 'CHS Temp (°F)', isContinuous: true },
+  { value: 'cds', label: 'CDS Temp (°F)', isContinuous: true },
+  { value: 'outdoor_wbt', label: 'Outdoor WBT (°F)', isContinuous: true },
+  { value: 'outdoor_dbt', label: 'Outdoor DBT (°F)', isContinuous: true },
 ];
 
 // Default bin sizes
 const DEFAULT_BIN_SIZES: Record<string, number> = {
-  chs_temp: 2,
-  cds_temp: 3,
-  outdoor_temp: 5,
+  chs: 2,
+  cds: 3,
+  outdoor_wbt: 3,
+  outdoor_dbt: 5,
 };
 
 // Function to bin a value into a range string
@@ -67,51 +71,6 @@ function getCategoryValue(d: DataPoint, field: LabelField, binSize?: number): st
   return binValue(value, step);
 }
 
-// Mock data generator
-function generateMockData(): DataPoint[] {
-  const data: DataPoint[] = [];
-  const combinations = {
-    1: ['CH-1', 'CH-2', 'CH-3'],
-    2: ['CH-1+CH-2', 'CH-1+CH-3', 'CH-2+CH-3'],
-    3: ['CH-1+CH-2+CH-3'],
-  };
-
-  for (let i = 0; i < 500; i++) {
-    const numChillers = Math.random() < 0.3 ? 1 : Math.random() < 0.7 ? 2 : 3;
-    const combos = combinations[numChillers as 1 | 2 | 3];
-    const combo = combos[Math.floor(Math.random() * combos.length)];
-    const baseLoad = numChillers * 60 + Math.random() * 40;
-    const coolingLoad = baseLoad + (Math.random() - 0.5) * 30;
-    const chsTemp = 44 + Math.random() * 4;
-    const outdoorTemp = 75 + Math.random() * 20;
-    const cdsTemp = 80 + (outdoorTemp - 75) * 0.4 + Math.random() * 3;
-
-    let baseEfficiency = 0.75;
-    if (combo === 'CH-1' || combo === 'CH-1+CH-2') baseEfficiency = 0.72;
-    if (combo === 'CH-2' || combo === 'CH-2+CH-3') baseEfficiency = 0.78;
-    if (combo === 'CH-3' || combo === 'CH-1+CH-3') baseEfficiency = 0.75;
-
-    const loadFactor = Math.min(coolingLoad / 150, 1);
-    const chsFactor = (chsTemp - 44) * 0.01;
-    const outdoorFactor = (outdoorTemp - 75) * 0.002;
-    const efficiency = baseEfficiency - 0.1 * (1 - loadFactor) + chsFactor + outdoorFactor + (Math.random() - 0.5) * 0.06;
-    const power = coolingLoad * efficiency;
-
-    data.push({
-      timestamp: new Date(Date.now() - Math.random() * 90 * 24 * 60 * 60 * 1000).toISOString(),
-      cooling_load: Math.round(coolingLoad * 10) / 10,
-      power: Math.round(power * 10) / 10,
-      efficiency: Math.round(efficiency * 1000) / 1000,
-      num_chillers: numChillers,
-      chiller_combination: combo,
-      chs_temp: Math.round(chsTemp * 10) / 10,
-      cds_temp: Math.round(cdsTemp * 10) / 10,
-      outdoor_temp: Math.round(outdoorTemp * 10) / 10,
-    });
-  }
-  return data;
-}
-
 const DataAnalyticsModal: React.FC<DataAnalyticsModalProps> = ({ isOpen, onClose }) => {
   const { siteId } = useParams<{ siteId: string }>();
   const chartRef = useRef<HTMLDivElement>(null);
@@ -124,6 +83,54 @@ const DataAnalyticsModal: React.FC<DataAnalyticsModalProps> = ({ isOpen, onClose
     return d.toISOString().split('T')[0];
   });
   const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0]);
+
+  // Refs for date input navigation
+  const startMonthRef = useRef<HTMLInputElement>(null);
+  const startYearRef = useRef<HTMLInputElement>(null);
+  const endDayRef = useRef<HTMLInputElement>(null);
+  const endMonthRef = useRef<HTMLInputElement>(null);
+  const endYearRef = useRef<HTMLInputElement>(null);
+
+  // Split date parts for separate inputs
+  const [startDay, setStartDay] = useState(() => startDate.split('-')[2]);
+  const [startMonth, setStartMonth] = useState(() => startDate.split('-')[1]);
+  const [startYear, setStartYear] = useState(() => startDate.split('-')[0]);
+  const [endDay, setEndDay] = useState(() => endDate.split('-')[2]);
+  const [endMonth, setEndMonth] = useState(() => endDate.split('-')[1]);
+  const [endYear, setEndYear] = useState(() => endDate.split('-')[0]);
+
+  // Sync to main date state
+  useEffect(() => {
+    if (startDay.length === 2 && startMonth.length === 2 && startYear.length === 4) {
+      const d = `${startYear}-${startMonth}-${startDay}`;
+      if (!isNaN(Date.parse(d))) setStartDate(d);
+    }
+  }, [startDay, startMonth, startYear]);
+
+  useEffect(() => {
+    if (endDay.length === 2 && endMonth.length === 2 && endYear.length === 4) {
+      const d = `${endYear}-${endMonth}-${endDay}`;
+      if (!isNaN(Date.parse(d))) setEndDate(d);
+    }
+  }, [endDay, endMonth, endYear]);
+
+  const handleDatePartChange = (
+    value: string,
+    maxLen: number,
+    setter: (v: string) => void,
+    nextRef?: React.RefObject<HTMLInputElement>
+  ) => {
+    const cleaned = value.replace(/\D/g, '').slice(0, maxLen);
+    setter(cleaned);
+    if (cleaned.length === maxLen && nextRef?.current) {
+      nextRef.current.focus();
+      nextRef.current.select();
+    }
+  };
+
+  const handleDatePartFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+    e.target.select();
+  };
 
   // Time resolution
   const [resolution, setResolution] = useState<'1m' | '15m' | '1h'>('1h');
@@ -148,27 +155,39 @@ const DataAnalyticsModal: React.FC<DataAnalyticsModalProps> = ({ isOpen, onClose
   // Data
   const [rawData, setRawData] = useState<DataPoint[]>([]);
   const [loading, setLoading] = useState(false);
+  const [dataCount, setDataCount] = useState<number | null>(null);
 
   // Check if field needs binning
   const isPrimaryContinuous = LABEL_OPTIONS.find(o => o.value === primaryLabel)?.isContinuous || false;
   const isSecondaryContinuous = LABEL_OPTIONS.find(o => o.value === secondaryLabel)?.isContinuous || false;
 
-  // Fetch data
-  useEffect(() => {
-    if (!isOpen || !siteId) return;
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        await new Promise(resolve => setTimeout(resolve, 300));
-        setRawData(generateMockData());
-      } catch (err) {
-        console.error('Failed to fetch analytics data:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
-  }, [isOpen, siteId, startDate, endDate, startTime, endTime, dayType, resolution]);
+  // Fetch data from API
+  const fetchData = async () => {
+    if (!siteId) return;
+    setLoading(true);
+    try {
+      const url = API_ENDPOINTS.plantPerformance(siteId, {
+        start_date: startDate,
+        end_date: endDate,
+        resolution,
+        start_time: startTime,
+        end_time: endTime,
+        day_type: dayType,
+      });
+      const response = await fetch(url);
+      if (!response.ok) throw new Error('Failed to fetch data');
+      const result = await response.json();
+      setRawData(result.data || []);
+      setDataCount(result.count || result.data?.length || 0);
+    } catch (err) {
+      console.error('Failed to fetch analytics data:', err);
+      setRawData([]);
+      setDataCount(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
 
   // Filter data
   const filteredData = useMemo(() => {
@@ -356,7 +375,7 @@ const DataAnalyticsModal: React.FC<DataAnalyticsModalProps> = ({ isOpen, onClose
             {/* Y-Axis */}
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Y-Axis</label>
-              <select value={yAxis} onChange={e => setYAxis(e.target.value as any)} className="w-full px-3 py-2 border rounded-md text-sm">
+              <select value={yAxis} onChange={e => setYAxis(e.target.value as any)} className="w-full px-3 py-1.5 bg-gray-100 rounded text-sm outline-none focus:bg-white focus:ring-1 focus:ring-blue-400">
                 <option value="efficiency">Efficiency (kW/RT)</option>
                 <option value="power">Power (kW)</option>
               </select>
@@ -365,19 +384,68 @@ const DataAnalyticsModal: React.FC<DataAnalyticsModalProps> = ({ isOpen, onClose
             {/* Date Range */}
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Date Range</label>
-              <div className="flex gap-1 items-center">
+              <div className="flex items-center bg-gray-100 rounded px-2 py-1.5 text-sm">
+                {/* Start Date */}
                 <input
-                  type="date"
-                  value={startDate}
-                  onChange={e => setStartDate(e.target.value)}
-                  className="flex-1 px-1.5 py-1 border rounded text-xs"
+                  type="text"
+                  value={startDay}
+                  onChange={e => handleDatePartChange(e.target.value, 2, setStartDay, startMonthRef)}
+                  onFocus={handleDatePartFocus}
+                  placeholder="dd"
+                  className="bg-transparent outline-none w-6 text-center"
                 />
-                <span className="text-gray-400 text-xs">-</span>
+                <span className="text-gray-400">/</span>
                 <input
-                  type="date"
-                  value={endDate}
-                  onChange={e => setEndDate(e.target.value)}
-                  className="flex-1 px-1.5 py-1 border rounded text-xs"
+                  ref={startMonthRef}
+                  type="text"
+                  value={startMonth}
+                  onChange={e => handleDatePartChange(e.target.value, 2, setStartMonth, startYearRef)}
+                  onFocus={handleDatePartFocus}
+                  placeholder="mm"
+                  className="bg-transparent outline-none w-6 text-center"
+                />
+                <span className="text-gray-400">/</span>
+                <input
+                  ref={startYearRef}
+                  type="text"
+                  value={startYear}
+                  onChange={e => handleDatePartChange(e.target.value, 4, setStartYear, endDayRef)}
+                  onFocus={handleDatePartFocus}
+                  placeholder="yyyy"
+                  className="bg-transparent outline-none w-10 text-center"
+                />
+
+                <span className="text-gray-400 mx-2">-</span>
+
+                {/* End Date */}
+                <input
+                  ref={endDayRef}
+                  type="text"
+                  value={endDay}
+                  onChange={e => handleDatePartChange(e.target.value, 2, setEndDay, endMonthRef)}
+                  onFocus={handleDatePartFocus}
+                  placeholder="dd"
+                  className="bg-transparent outline-none w-6 text-center"
+                />
+                <span className="text-gray-400">/</span>
+                <input
+                  ref={endMonthRef}
+                  type="text"
+                  value={endMonth}
+                  onChange={e => handleDatePartChange(e.target.value, 2, setEndMonth, endYearRef)}
+                  onFocus={handleDatePartFocus}
+                  placeholder="mm"
+                  className="bg-transparent outline-none w-6 text-center"
+                />
+                <span className="text-gray-400">/</span>
+                <input
+                  ref={endYearRef}
+                  type="text"
+                  value={endYear}
+                  onChange={e => handleDatePartChange(e.target.value, 4, setEndYear)}
+                  onFocus={handleDatePartFocus}
+                  placeholder="yyyy"
+                  className="bg-transparent outline-none w-10 text-center"
                 />
               </div>
             </div>
@@ -394,10 +462,10 @@ const DataAnalyticsModal: React.FC<DataAnalyticsModalProps> = ({ isOpen, onClose
                   <button
                     key={opt.value}
                     onClick={() => setResolution(opt.value as any)}
-                    className={`flex-1 px-2 py-1.5 text-xs rounded border transition-colors ${
+                    className={`flex-1 px-2 py-1.5 text-xs rounded transition-colors ${
                       resolution === opt.value
-                        ? 'bg-blue-500 text-white border-blue-500'
-                        : 'bg-white text-gray-600 border-gray-300 hover:border-blue-300'
+                        ? 'bg-blue-500 text-white'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     }`}
                   >
                     {opt.label}
@@ -409,29 +477,48 @@ const DataAnalyticsModal: React.FC<DataAnalyticsModalProps> = ({ isOpen, onClose
             {/* Time of Day */}
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Time of Day</label>
-              <div className="flex gap-2 items-center">
-                <input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} className="flex-1 px-2 py-1.5 border rounded-md text-sm" />
-                <span className="text-gray-400">-</span>
-                <input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} className="flex-1 px-2 py-1.5 border rounded-md text-sm" />
+              <div className="flex items-center bg-gray-100 rounded px-2 py-1.5">
+                <input
+                  type="time"
+                  value={startTime}
+                  onChange={e => setStartTime(e.target.value)}
+                  className="bg-transparent text-sm outline-none flex-1 min-w-0"
+                />
+                <span className="text-gray-400 mx-2">-</span>
+                <input
+                  type="time"
+                  value={endTime}
+                  onChange={e => setEndTime(e.target.value)}
+                  className="bg-transparent text-sm outline-none flex-1 min-w-0"
+                />
               </div>
             </div>
 
             {/* Day Type */}
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Day Type</label>
-              <select value={dayType} onChange={e => setDayType(e.target.value)} className="w-full px-3 py-2 border rounded-md text-sm">
+              <select value={dayType} onChange={e => setDayType(e.target.value)} className="w-full px-3 py-1.5 bg-gray-100 rounded text-sm outline-none focus:bg-white focus:ring-1 focus:ring-blue-400">
                 <option value="all">All Days</option>
                 <option value="weekdays">Weekdays Only</option>
                 <option value="weekends">Weekends Only</option>
               </select>
             </div>
 
+            {/* Plot Button */}
+            <button
+              onClick={fetchData}
+              disabled={loading}
+              className="w-full py-2 bg-[#0E7EE4] text-white text-sm font-medium rounded-md hover:bg-[#0a6bc4] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {loading ? 'Loading...' : 'Plot Graph'}
+            </button>
+
             <hr />
 
             {/* Primary Label (Color) */}
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Primary Label (Color)</label>
-              <select value={primaryLabel} onChange={e => setPrimaryLabel(e.target.value as LabelField)} className="w-full px-3 py-2 border rounded-md text-sm">
+              <select value={primaryLabel} onChange={e => setPrimaryLabel(e.target.value as LabelField)} className="w-full px-3 py-1.5 bg-gray-100 rounded text-sm outline-none focus:bg-white focus:ring-1 focus:ring-blue-400">
                 {LABEL_OPTIONS.map(opt => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
                 ))}
@@ -443,7 +530,7 @@ const DataAnalyticsModal: React.FC<DataAnalyticsModalProps> = ({ isOpen, onClose
                     type="number"
                     value={primaryBinSize}
                     onChange={e => setPrimaryBinSize(Math.max(0.5, parseFloat(e.target.value) || 1))}
-                    className="w-16 px-2 py-1 border rounded text-sm"
+                    className="w-16 px-2 py-1 bg-gray-100 rounded text-sm outline-none focus:bg-white focus:ring-1 focus:ring-blue-400"
                     step="0.5"
                     min="0.5"
                   />
@@ -454,7 +541,7 @@ const DataAnalyticsModal: React.FC<DataAnalyticsModalProps> = ({ isOpen, onClose
             {/* Secondary Label (Shape) */}
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Secondary Label (Shape)</label>
-              <select value={secondaryLabel} onChange={e => setSecondaryLabel(e.target.value as LabelField)} className="w-full px-3 py-2 border rounded-md text-sm">
+              <select value={secondaryLabel} onChange={e => setSecondaryLabel(e.target.value as LabelField)} className="w-full px-3 py-1.5 bg-gray-100 rounded text-sm outline-none focus:bg-white focus:ring-1 focus:ring-blue-400">
                 {LABEL_OPTIONS.map(opt => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
                 ))}
@@ -466,7 +553,7 @@ const DataAnalyticsModal: React.FC<DataAnalyticsModalProps> = ({ isOpen, onClose
                     type="number"
                     value={secondaryBinSize}
                     onChange={e => setSecondaryBinSize(Math.max(0.5, parseFloat(e.target.value) || 1))}
-                    className="w-16 px-2 py-1 border rounded text-sm"
+                    className="w-16 px-2 py-1 bg-gray-100 rounded text-sm outline-none focus:bg-white focus:ring-1 focus:ring-blue-400"
                     step="0.5"
                     min="0.5"
                   />
@@ -499,7 +586,10 @@ const DataAnalyticsModal: React.FC<DataAnalyticsModalProps> = ({ isOpen, onClose
             {/* Stats */}
             <div className="pt-4 border-t">
               <div className="text-xs text-gray-500 space-y-1">
-                <div>Total points: <span className="font-medium text-gray-700">{filteredData.length}</span></div>
+                {dataCount !== null && (
+                  <div>From API: <span className="font-medium text-gray-700">{dataCount.toLocaleString()}</span></div>
+                )}
+                <div>Displayed: <span className="font-medium text-gray-700">{filteredData.length.toLocaleString()}</span></div>
                 {primaryLabel !== 'none' && (
                   <div>Primary groups: <span className="font-medium text-gray-700">{primaryCategories.length}</span></div>
                 )}

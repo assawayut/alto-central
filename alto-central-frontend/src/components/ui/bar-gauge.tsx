@@ -1,7 +1,7 @@
 interface BarGaugeProps {
   labels: string[];
   colors: string[];
-  value: number;
+  value?: number;
   threshold: number[]; // Should have length of colors.length + 1
   showValue?: boolean;
 }
@@ -10,10 +10,11 @@ export function BarGauge({ labels, colors, value, threshold, showValue = true }:
   // Calculate percentage based on linear interpolation between thresholds
   const minThreshold = threshold[0];
   const maxThreshold = threshold[threshold.length - 1];
-  const percentage = Math.min(Math.max(((value - minThreshold) / (maxThreshold - minThreshold)) * 100, 0), 100);
+  const safeValue = value ?? minThreshold;
+  const percentage = Math.min(Math.max(((safeValue - minThreshold) / (maxThreshold - minThreshold)) * 100, 0), 100);
 
   // Get the current section color
-  const currentLevel = threshold.slice(0, -1).findIndex((t) => value <= t);
+  const currentLevel = threshold.slice(0, -1).findIndex((t) => safeValue <= t);
   const currentColor = currentLevel !== -1 ? colors[currentLevel - 1] : colors[colors.length - 1];
 
   // Calculate section widths based on thresholds

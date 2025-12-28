@@ -49,17 +49,32 @@ interface PlantPerformanceResponse {
     timestamp: string;           // ISO 8601 with timezone
     cooling_load: number;        // RT
     power: number;               // kW
-    efficiency: number;          // kW/RT
+    efficiency: number;          // kW/RT (calculated: power / cooling_load)
     num_chillers: number;        // 1, 2, 3, 4, 5...
     chiller_combination: string; // "CH-1", "CH-1+CH-2", "CH-1+CH-2+CH-3", etc.
     // Additional fields for secondary labeling
-    chs_temp: number;            // Chilled water supply temp (°F)
-    cds_temp: number;            // Condenser water supply temp (°F)
-    outdoor_temp: number;        // Outdoor dry-bulb temp (°F)
-    part_load: number;           // Part load percentage (%)
+    chs: number;                 // Chilled water supply temp (°F)
+    cds: number;                 // Condenser water supply temp (°F)
+    outdoor_wbt: number;         // Outdoor wet-bulb temp (°F)
+    outdoor_dbt: number;         // Outdoor dry-bulb temp (°F)
   }>;
 }
 ```
+
+### Data Source Mapping
+
+| Response Field | Device ID | Datapoint |
+|----------------|-----------|-----------|
+| `cooling_load` | `plant` | `cooling_rate` |
+| `power` | `plant` | `power` |
+| `chs` | `chilled_water_loop` | `supply_water_temperature` |
+| `cds` | `condenser_water_loop` | `supply_water_temperature` |
+| `outdoor_wbt` | `outdoor_weather_station` | `wetbulb_temperature` |
+| `outdoor_dbt` | `outdoor_weather_station` | `drybulb_temperature` |
+| `num_chillers` | `chiller_1`, `chiller_2`, ... | `status_read` (count where = 1) |
+| `chiller_combination` | `chiller_1`, `chiller_2`, ... | `status_read` (join IDs where = 1) |
+
+> **Note:** Data already exists in 1m, 15m, and 1h tables - no resampling needed. Just query from the appropriate table based on `resolution` parameter.
 
 ### Secondary Labeling
 
@@ -67,13 +82,14 @@ The frontend supports two-level labeling using **color** and **shape**:
 
 | Visual | Label By |
 |--------|----------|
-| Color | Primary: `num_chillers` or `chiller_combination` |
-| Shape | Secondary: `chs_temp`, `cds_temp`, `outdoor_temp` (binned into ranges) |
+| Color | Primary: any field (e.g., `num_chillers`, `chiller_combination`, temps) |
+| Shape | Secondary: any field (binned into ranges for continuous values) |
 
-**Binning Strategy** (frontend handles this):
-- CHS Temp: 2°F bins (e.g., 42-44, 44-46, 46-48°F)
-- CDS Temp: 3°F bins (e.g., 82-85, 85-88, 88-91°F)
-- Outdoor Temp: 5°F bins (e.g., 75-80, 80-85, 85-90°F)
+**Binning Strategy** (frontend handles this, user-configurable):
+- CHS: 2°F bins (e.g., 42-44, 44-46, 46-48°F)
+- CDS: 3°F bins (e.g., 82-85, 85-88, 88-91°F)
+- Outdoor WBT: 3°F bins (e.g., 65-68, 68-71, 71-74°F)
+- Outdoor DBT: 5°F bins (e.g., 75-80, 80-85, 85-90°F)
 
 ---
 
@@ -106,7 +122,11 @@ curl "http://localhost:8642/api/v1/sites/kspo/analytics/plant-performance?start_
       "power": 120.3,
       "efficiency": 0.80,
       "num_chillers": 2,
-      "chiller_combination": "CH-1+CH-2"
+      "chiller_combination": "CH-1+CH-2",
+      "chs": 44.2,
+      "cds": 85.1,
+      "outdoor_wbt": 68.5,
+      "outdoor_dbt": 82.3
     },
     {
       "timestamp": "2025-10-15T14:15:00+07:00",
@@ -114,7 +134,11 @@ curl "http://localhost:8642/api/v1/sites/kspo/analytics/plant-performance?start_
       "power": 138.5,
       "efficiency": 0.77,
       "num_chillers": 2,
-      "chiller_combination": "CH-1+CH-3"
+      "chiller_combination": "CH-1+CH-3",
+      "chs": 44.5,
+      "cds": 86.2,
+      "outdoor_wbt": 69.1,
+      "outdoor_dbt": 83.0
     },
     {
       "timestamp": "2025-10-16T10:00:00+07:00",
@@ -122,7 +146,11 @@ curl "http://localhost:8642/api/v1/sites/kspo/analytics/plant-performance?start_
       "power": 85.5,
       "efficiency": 0.90,
       "num_chillers": 1,
-      "chiller_combination": "CH-1"
+      "chiller_combination": "CH-1",
+      "chs": 43.8,
+      "cds": 82.5,
+      "outdoor_wbt": 65.2,
+      "outdoor_dbt": 78.5
     }
   ]
 }
@@ -165,10 +193,17 @@ Frontend: Analyze only peak afternoon data on working days with 1-minute granula
 ## Backend Implementation Notes
 
 ### 1. Data Source
-Query from timeseries data:
-- `plant.power` - Total plant power (kW)
-- `plant.cooling_rate` - Total cooling load (RT)
-- `chiller_*.status_read` - Each chiller's running status (0/1)
+Query from the appropriate resolution table (1m/15m/1h) based on `resolution` parameter:
+
+| Field | Device ID | Datapoint |
+|-------|-----------|-----------|
+| power | `plant` | `power` |
+| cooling_load | `plant` | `cooling_rate` |
+| chs | `chilled_water_loop` | `supply_water_temperature` |
+| cds | `condenser_water_loop` | `supply_water_temperature` |
+| outdoor_wbt | `outdoor_weather_station` | `wetbulb_temperature` |
+| outdoor_dbt | `outdoor_weather_station` | `drybulb_temperature` |
+| chiller status | `chiller_1`, `chiller_2`, ... | `status_read` (0/1) |
 
 ### 2. Determining `num_chillers`
 At each timestamp, count chillers where `status_read = 1`:
@@ -189,13 +224,13 @@ efficiency = power / cooling_load if cooling_load > 0 else None
 ```
 - Skip data points where `cooling_load < 10 RT` (avoid noise at very low loads)
 
-### 5. Aggregation
-Based on the `resolution` parameter:
-- `1m`: Return raw 1-minute data (no aggregation)
-- `15m`: Aggregate to 15-minute intervals (average values)
-- `1h`: Aggregate to hourly intervals (average values)
+### 5. Resolution Tables
+Data already exists in separate tables - just query from the correct one:
+- `resolution=1m`: Query from 1-minute table
+- `resolution=15m`: Query from 15-minute table
+- `resolution=1h`: Query from 1-hour table
 
-Data point counts for 1 month:
+Approximate data point counts for 1 month:
 - `1m`: ~43,200 points
 - `15m`: ~2,880 points
 - `1h`: ~720 points

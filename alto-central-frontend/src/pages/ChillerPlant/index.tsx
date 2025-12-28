@@ -1,4 +1,3 @@
-import React from 'react'
 import { useParams } from 'react-router-dom'
 import { PageLayout } from '@/components/layout/PageLayout'
 import { RealtimeProvider } from '@/features/realtime'
@@ -81,7 +80,7 @@ function ChillerPlantContent() {
             </div>
             <div className="col-span-12 lg:col-span-6">
               <div className="alto-card p-2 h-full">
-                <PlantDiagram variant="water-cooled" />
+                <PlantDiagram />
               </div>
             </div>
           </div>

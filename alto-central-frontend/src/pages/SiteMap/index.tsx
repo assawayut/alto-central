@@ -1,4 +1,3 @@
-import React from 'react'
 import { Building2, Zap, Activity, MapPin } from 'lucide-react'
 import { PageLayout } from '@/components/layout/PageLayout'
 import { Card } from '@/components/ui/card'

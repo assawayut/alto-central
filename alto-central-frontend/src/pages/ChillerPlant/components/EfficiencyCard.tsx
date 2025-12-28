@@ -1,4 +1,3 @@
-import React from 'react';
 import { BarGauge } from "@/components/ui/bar-gauge";
 import { useRealtime } from '@/features/realtime';
 
@@ -12,30 +11,30 @@ interface EfficiencyCardProps {
   title: string;
 }
 
-const EfficiencyCard: React.FC<EfficiencyCardProps> = ({ 
+const EfficiencyCard: React.FC<EfficiencyCardProps> = ({
   thresholds = [0.0, 0.6, 0.7, 0.8, 1.0],
   deviceId = 'plant',
   title = 'Plant Efficiency'
 }) => {
   // Use the realtime context to get data
   const { getValue } = useRealtime();
-  
+
   // Calculate efficiency as power / cooling_rate (kW/RT)
   let efficiencyValue: number | undefined = undefined;
-  
+
   if (deviceId === 'plant') {
     // Plant efficiency: plant_power / plant_cooling_rate
-    const coolingRate = getValue(deviceId, 'cooling_rate');
-    const power = getValue(deviceId, 'power');
-    
+    const coolingRate = getValue(deviceId, 'cooling_rate') as number | undefined;
+    const power = getValue(deviceId, 'power') as number | undefined;
+
     if (coolingRate !== undefined && power !== undefined && coolingRate > 30) {
       efficiencyValue = power / coolingRate;
     }
   } else if (deviceId === 'air_distribution_system') {
     // Air-side efficiency: air_power / plant_cooling_rate
-    const airPower = getValue(deviceId, 'power');
-    const plantCoolingRate = getValue('plant', 'cooling_rate');
-    
+    const airPower = getValue(deviceId, 'power') as number | undefined;
+    const plantCoolingRate = getValue('plant', 'cooling_rate') as number | undefined;
+
     if (airPower !== undefined && plantCoolingRate !== undefined && plantCoolingRate > 30) {
       efficiencyValue = airPower / plantCoolingRate;
     }

@@ -64,7 +64,10 @@ alto-central/
 │   │   │   │   │   ├── PowerCard.tsx
 │   │   │   │   │   ├── SystemAlertCard.tsx
 │   │   │   │   │   ├── UpcomingEventsCard.tsx
-│   │   │   │   │   └── WeatherStationCard.tsx
+│   │   │   │   │   ├── WeatherStationCard.tsx
+│   │   │   │   │   ├── DataAnalyticsCard.tsx
+│   │   │   │   │   ├── DataAnalyticsModal.tsx
+│   │   │   │   │   └── OptimizationCard.tsx
 │   │   │   │   └── index.tsx
 │   │   │   └── SiteMap/        # Landing page with map
 │   │   │       ├── components/
@@ -128,14 +131,25 @@ sites:
 | `GET /sites/{siteId}/realtime/latest` | Real-time device data |
 | `GET /sites/{siteId}/energy/daily` | Yesterday vs Today energy |
 | `GET /sites/{siteId}/timeseries/aggregated` | Historical data for charts |
+| `GET /sites/{siteId}/analytics/plant-performance` | Plant performance scatter plot data |
 
 ### Timeseries Query Parameters
 | Parameter | Default | Options | Description |
 |-----------|---------|---------|-------------|
 | `device_id` | `plant` | Any device ID | Device to query |
 | `datapoint` | `power` | Any datapoint | Datapoint to query |
-| `period` | `24h` | `24h`, `7d`, `30d` | Time range |
+| `period` | `24h` | `24h`, `7d`, `30d`, `today`, `yesterday` | Time range |
 | `aggregation` | `hourly` | `hourly`, `daily` | Aggregation level |
+
+### Plant Performance Analytics Parameters
+| Parameter | Default | Options | Description |
+|-----------|---------|---------|-------------|
+| `start_date` | - | `YYYY-MM-DD` | Start date for query |
+| `end_date` | - | `YYYY-MM-DD` | End date for query |
+| `resolution` | `1h` | `1m`, `15m`, `1h` | Data resolution |
+| `start_time` | `00:00` | `HH:MM` | Filter by time of day (start) |
+| `end_time` | `23:59` | `HH:MM` | Filter by time of day (end) |
+| `day_type` | `all` | `all`, `weekdays`, `weekends` | Filter by day type |
 
 ### Key Datapoints
 
@@ -176,7 +190,8 @@ sites:
    - 3-column layout:
      - **Left**: EnergyUsageCard, BuildingLoadGraph, SystemAlertCard
      - **Center**: Efficiency + Power + Weather cards, Equipment Status + Plant Diagram
-     - **Right**: UpcomingEventsCard
+     - **Right**: DataAnalyticsCard, OptimizationCard
+   - UpcomingEventsCard in header row
    - Air-Side tab hidden when `hvac_type: water`
 
 ### Dashboard Components
@@ -191,6 +206,9 @@ sites:
 | `PlantEquipmentCard` | Derived from realtime devices (`chiller_*`, `pchp_*`, etc.) |
 | `PlantEquipmentModal` | Device details with efficiency from `plant.efficiency_*` |
 | `EfficiencyCard` | `plant.efficiency` |
+| `DataAnalyticsCard` | Opens DataAnalyticsModal |
+| `DataAnalyticsModal` | `/analytics/plant-performance` API (ECharts scatter plot) |
+| `OptimizationCard` | Placeholder for future ML optimization features |
 
 ## Development
 

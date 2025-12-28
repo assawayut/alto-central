@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { useNavigate } from 'react-router-dom';
@@ -25,12 +25,6 @@ const MAP_STYLE: maplibregl.StyleSpecification = {
     },
   ],
 };
-
-interface SiteMarkerProps {
-  site: SiteConfig;
-  map: maplibregl.Map;
-  onClick: (siteId: string) => void;
-}
 
 // Create a custom marker element
 const createMarkerElement = (site: SiteConfig, onClick: () => void): HTMLElement => {
@@ -123,7 +117,6 @@ const MapView: React.FC = () => {
       style: MAP_STYLE,
       center: [defaultMapCenter.longitude, defaultMapCenter.latitude],
       zoom: defaultMapCenter.zoom,
-      attributionControl: true,
     });
 
     // Add navigation controls

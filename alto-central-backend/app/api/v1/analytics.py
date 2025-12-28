@@ -3,14 +3,21 @@
 Provides aggregated analytics for water-side chiller plant performance.
 """
 
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import date, datetime, time, timedelta
 from typing import Dict, List, Optional
-from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Path, Query
 
 from app.db.connections import get_timescale
-from app.config import get_site_by_id
+from app.core import (
+    get_site_timezone,
+    get_date_range,
+    to_local_timestamp,
+    parse_time_filter,
+    filter_by_time_of_day,
+    filter_by_day_type,
+    get_table_for_resolution,
+)
 
 router = APIRouter()
 
@@ -53,9 +60,8 @@ async def get_plant_performance(
     - 15m: aggregated_data_15min
     - 1h: aggregated_data_1hour
     """
-    # Get site config for timezone
-    site = get_site_by_id(site_id)
-    site_tz = ZoneInfo(site.timezone) if site else ZoneInfo("UTC")
+    # Get site timezone
+    site_tz = get_site_timezone(site_id)
 
     # Calculate default date range (3 months ago to today)
     today = datetime.now(site_tz).date()
@@ -65,28 +71,14 @@ async def get_plant_performance(
         start_date = end_date - timedelta(days=90)
 
     # Parse time filters
-    try:
-        filter_start_time = datetime.strptime(start_time, "%H:%M").time()
-        filter_end_time = datetime.strptime(end_time, "%H:%M").time()
-    except ValueError:
-        filter_start_time = time(0, 0)
-        filter_end_time = time(23, 59)
+    filter_start_time = parse_time_filter(start_time, time(0, 0))
+    filter_end_time = parse_time_filter(end_time, time(23, 59))
 
-    # Convert dates to timezone-aware datetimes for query
-    start_dt = datetime.combine(start_date, time(0, 0), tzinfo=site_tz)
-    end_dt = datetime.combine(end_date, time(23, 59, 59), tzinfo=site_tz)
+    # Convert dates to UTC for database query
+    start_utc, end_utc = get_date_range(start_date, end_date, site_tz)
 
-    # Convert to UTC for database query
-    start_utc = start_dt.astimezone(timezone.utc)
-    end_utc = end_dt.astimezone(timezone.utc)
-
-    # Determine table based on resolution
-    table_map = {
-        "1m": "aggregated_data",
-        "15m": "aggregated_data_15min",
-        "1h": "aggregated_data_1hour",
-    }
-    table_name = table_map.get(resolution, "aggregated_data_1hour")
+    # Get table name based on resolution
+    table_name = get_table_for_resolution(resolution)
 
     # Get TimescaleDB connection
     timescale = await get_timescale(site_id)
@@ -226,18 +218,14 @@ async def get_plant_performance(
     data_points = []
     for ts in sorted(plant_data.keys()):
         # Convert to site timezone for filtering and output
-        ts_local = ts.astimezone(site_tz) if ts.tzinfo else ts.replace(tzinfo=timezone.utc).astimezone(site_tz)
+        ts_local = to_local_timestamp(ts, site_tz)
 
         # Apply time-of-day filter
-        ts_time = ts_local.time()
-        if not (filter_start_time <= ts_time <= filter_end_time):
+        if not filter_by_time_of_day(ts_local, filter_start_time, filter_end_time):
             continue
 
         # Apply day type filter
-        weekday = ts_local.weekday()  # 0=Monday, 6=Sunday
-        if day_type == "weekdays" and weekday >= 5:
-            continue
-        if day_type == "weekends" and weekday < 5:
+        if not filter_by_day_type(ts_local, day_type):
             continue
 
         # Get plant values

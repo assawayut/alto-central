@@ -253,10 +253,6 @@ const getDiagramConfig = (variant: ChillerPlantVariant): DiagramConfig => ({
   paths: [], // This will be populated dynamically based on variant
 });
 
-interface ChillerPlantDiagramProps {
-  data: any;
-}
-
 const getPathsConfig = (variant: ChillerPlantVariant): PathConfig[] => {
   const chilledWaterPaths: PathConfig[] = [
     { from: 'building', to: 'chr', type: 'chr', direction: 'vertical-first' },
@@ -297,18 +293,18 @@ const ChillerPlantDiagram = () => {
   const { realtimeData, getValue, getUnit } = useRealtime();
 
   // Get plant data from the real-time context
-  const chr = getValue('chilled_water_loop', 'return_water_temperature');
-  const chs = getValue('chilled_water_loop', 'supply_water_temperature');
-  
-  // Get target CHW setpoint from plant
-  const chs_sp = getValue('plant', 'target_chw_setpoint');
+  const chr = getValue('chilled_water_loop', 'return_water_temperature') as number | undefined;
+  const chs = getValue('chilled_water_loop', 'supply_water_temperature') as number | undefined;
 
-  const flowCHW = getValue('chilled_water_loop', 'flow_rate');
-  const flowCDW = getValue('condenser_water_loop', 'flow_rate');
-  const cooling_rate = getValue('plant', 'cooling_rate');
-  const heat_reject = getValue('plant', 'heat_reject');
-  const cdwr = getValue('condenser_water_loop', 'return_water_temperature');
-  const cdws = getValue('condenser_water_loop', 'supply_water_temperature');
+  // Get target CHW setpoint from plant
+  const chs_sp = getValue('plant', 'target_chw_setpoint') as number | undefined;
+
+  const flowCHW = getValue('chilled_water_loop', 'flow_rate') as number | undefined;
+  const flowCDW = getValue('condenser_water_loop', 'flow_rate') as number | undefined;
+  const cooling_rate = getValue('plant', 'cooling_rate') as number | undefined;
+  const heat_reject = getValue('plant', 'heat_reject') as number | undefined;
+  const cdwr = getValue('condenser_water_loop', 'return_water_temperature') as number | undefined;
+  const cdws = getValue('condenser_water_loop', 'supply_water_temperature') as number | undefined;
   const diagramConfig = getDiagramConfig(variant);
 
   const renderWaterCooledComponents = () => {

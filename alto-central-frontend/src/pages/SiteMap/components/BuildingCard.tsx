@@ -1,4 +1,3 @@
-import React from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Thermometer, Zap, Activity } from 'lucide-react'
 import { Card } from '@/components/ui/card'
@@ -36,9 +35,9 @@ export function BuildingCard({ site, stats }: BuildingCardProps) {
 
   const statusVariant = {
     active: 'success',
-    warning: 'warning',
-    alarm: 'danger',
-    offline: 'muted',
+    warning: 'secondary',
+    alarm: 'destructive',
+    offline: 'outline',
   } as const
 
   const statusLabel = {
