@@ -57,7 +57,7 @@ class MongoDBConnection:
 
     async def disconnect(self) -> None:
         """Close the MongoDB connection."""
-        if self._client:
+        if self._client is not None:
             self._client.close()
             self._client = None
             self._db_control = None
@@ -88,14 +88,16 @@ class MongoDBConnection:
         Returns:
             List of action event documents
         """
-        if not self._is_connected or not self._db_control:
+        # Only check _is_connected flag to avoid pymongo __bool__ issue
+        # _db_control is guaranteed to be set when _is_connected is True
+        if not self._is_connected:
             return []
 
         try:
             collection = self._db_control["action_event"]
 
-            # Build query - filter by target_agent (site_id)
-            query: Dict[str, Any] = {"target_agent": self.site_id}
+            # Build query - each site has its own MongoDB, so no site filter needed
+            query: Dict[str, Any] = {}
             if status and status != "all":
                 query["status"] = status
 
@@ -169,6 +171,6 @@ async def init_mongodb() -> None:
 async def close_mongodb() -> None:
     """Close all MongoDB connections."""
     global _manager
-    if _manager:
+    if _manager is not None:
         await _manager.close_all()
         _manager = None

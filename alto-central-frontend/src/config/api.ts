@@ -68,6 +68,23 @@ export const API_ENDPOINTS = {
     if (params.day_type) searchParams.set('day_type', params.day_type);
     return `${API_BASE_URL}/sites/${siteId}/analytics/cooling-tower-tradeoff?${searchParams}`;
   },
+
+  // Events
+  events: (siteId: string, params?: { status?: string; limit?: number }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.status) searchParams.set('status', params.status);
+    if (params?.limit) searchParams.set('limit', params.limit.toString());
+    const query = searchParams.toString();
+    return `${API_BASE_URL}/sites/${siteId}/events/${query ? `?${query}` : ''}`;
+  },
+
+  eventsUpcoming: (siteId: string, params?: { hours_ahead?: number; limit?: number }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.hours_ahead) searchParams.set('hours_ahead', params.hours_ahead.toString());
+    if (params?.limit) searchParams.set('limit', params.limit.toString());
+    const query = searchParams.toString();
+    return `${API_BASE_URL}/sites/${siteId}/events/upcoming${query ? `?${query}` : ''}`;
+  },
 };
 
 // Polling interval in milliseconds

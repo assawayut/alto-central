@@ -2,28 +2,30 @@
 
 ## Overview
 
-This document specifies the backend API requirements for the Upcoming Events feature in Alto Central. The feature displays scheduled events, equipment sequences, and alerts in a timeline format on the Chiller Plant dashboard.
+This document specifies the backend API for the Upcoming Events feature in Alto Central. The feature displays scheduled events, equipment sequences, and alerts in a timeline format on the Chiller Plant dashboard.
+
+**Status: IMPLEMENTED** - Backend reads from MongoDB `control.action_event` collection.
 
 Reference implementation: `alto-cero-interface/NextEventTimeline.tsx`
+
+---
 
 ## Endpoints
 
 ### 1. Get Action Events
 
-Retrieves action events for a site (scheduled, running, and recent completed events).
+Retrieves action events for a site (scheduled, running, and completed events).
 
 ```
-GET /api/v1/sites/{site_id}/action-events/
+GET /api/v1/sites/{site_id}/events/
 ```
 
 #### Query Parameters
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `status` | string | `all` | Filter by status: `all`, `pending`, `running`, `completed`, `failed` |
-| `limit` | int | `20` | Maximum number of events to return |
-| `hours_ahead` | int | `24` | How far ahead to look for pending events |
-| `hours_behind` | int | `2` | How far back to look for completed events |
+| `status` | string | `all` | Filter by status: `all`, `pending`, `in-progress`, `completed`, `failed` |
+| `limit` | int | `20` | Maximum number of events to return (max: 100) |
 
 #### Response
 
@@ -32,67 +34,60 @@ GET /api/v1/sites/{site_id}/action-events/
   "site_id": "kspo",
   "events": [
     {
-      "event_id": "evt_001",
-      "event_type": "schedule",
-      "title": "Scheduled Maintenance",
-      "description": "Monthly chiller inspection",
-      "scheduled_time": "2024-01-15T09:00:00+07:00",
-      "end_time": "2024-01-15T11:00:00+07:00",
+      "event_id": "AUTO-SCHEDULE-2025Dec28-1700-Priority3-stop_chiller_sequence",
+      "event_type": "stop_chiller_sequence",
+      "title": "Stop CHILLER-4",
+      "description": null,
+      "scheduled_time": "2025-12-28T17:00:00+07:00",
       "status": "pending",
-      "equipment": ["chiller_1", "chiller_2"],
-      "created_at": "2024-01-10T14:30:00+07:00",
-      "updated_at": "2024-01-10T14:30:00+07:00"
+      "equipment": ["chiller_4", "cdp_4", "pchp_4"],
+      "source": "chillerplantschedule",
+      "payload": {
+        "chiller_id": "chiller_4",
+        "group_equipment": ["pchp_4", "cdp_4"],
+        "priority_index": 2,
+        "post_circulation": true,
+        "post_circulation_delay": 1800
+      }
     },
     {
-      "event_id": "evt_002",
+      "event_id": "AUTO-SCHEDULE-2025Dec29-0500-Priority1-start_chiller_sequence",
       "event_type": "start_chiller_sequence",
-      "title": "Start Chiller Sequence",
-      "description": "Ramp up cooling capacity",
-      "scheduled_time": "2024-01-15T07:00:00+07:00",
-      "status": "completed",
-      "equipment": ["chiller_3"],
-      "created_at": "2024-01-14T18:00:00+07:00",
-      "updated_at": "2024-01-15T07:15:00+07:00",
-      "completed_at": "2024-01-15T07:15:00+07:00"
+      "title": "Start CHILLER-1",
+      "description": null,
+      "scheduled_time": "2025-12-29T05:00:00+07:00",
+      "status": "pending",
+      "equipment": ["chiller_1", "pchp_1", "cdp_1"],
+      "source": "chillerplantschedule",
+      "payload": {
+        "chiller_id": "chiller_1",
+        "group_equipment": ["pchp_1", "cdp_1"],
+        "priority_index": 0
+      }
     }
   ],
   "total_count": 2
 }
 ```
 
-### 2. Get Upcoming Schedules (Optional)
+### 2. Get Upcoming Events (for Timeline)
 
-Retrieves recurring schedules for a site.
+Optimized endpoint for the UpcomingEventsCard component.
 
 ```
-GET /api/v1/sites/{site_id}/schedules/upcoming/
+GET /api/v1/sites/{site_id}/events/upcoming
 ```
 
 #### Query Parameters
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `days_ahead` | int | `7` | How many days ahead to look |
+| `hours_ahead` | int | `24` | How far ahead to look (hours, max: 168) |
+| `limit` | int | `15` | Maximum number of events to return (max: 50) |
 
 #### Response
 
-```json
-{
-  "site_id": "kspo",
-  "schedules": [
-    {
-      "schedule_id": "sch_001",
-      "title": "Weekly Inspection",
-      "description": "Check all equipment status",
-      "recurrence": "weekly",
-      "day_of_week": "monday",
-      "time": "09:00",
-      "next_occurrence": "2024-01-15T09:00:00+07:00",
-      "equipment": []
-    }
-  ]
-}
-```
+Same structure as `/events/` but only returns `pending` and `in-progress` events within the time window.
 
 ## Data Models
 
@@ -123,16 +118,12 @@ interface ActionEvent {
   event_id: string;
   event_type: 'schedule' | 'start_chiller_sequence' | 'stop_chiller_sequence' | 'alert' | 'optimization';
   title: string;
-  description?: string;
+  description: string | null;
   scheduled_time: string;  // ISO 8601 datetime with timezone
-  end_time?: string;       // ISO 8601 datetime (for duration-based events)
-  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+  status: 'pending' | 'in-progress' | 'completed' | 'failed';
   equipment: string[];     // List of device_ids affected
-  priority?: 'low' | 'medium' | 'high' | 'critical';
-  created_at: string;
-  updated_at: string;
-  completed_at?: string;
-  error_message?: string;  // If status is 'failed'
+  source: string;          // e.g., 'chillerplantschedule', 'controlschedule'
+  payload: object;         // Action-specific data (chiller_id, group_equipment, etc.)
 }
 ```
 
@@ -155,7 +146,7 @@ The frontend will poll this endpoint every **10 seconds** (same as realtime data
 // In UpcomingEventsCard.tsx
 const fetchEvents = async () => {
   const response = await fetch(
-    `${API_BASE_URL}/sites/${siteId}/action-events/?status=all&limit=20`
+    `${API_BASE_URL}/sites/${siteId}/events/upcoming?limit=15`
   );
   const data = await response.json();
   setEvents(data.events);
@@ -168,51 +159,41 @@ useEffect(() => {
 }, [siteId]);
 ```
 
-## Database Considerations
+## Data Source
 
-### Suggested Tables
+### MongoDB Collection
 
-```sql
--- Action Events table
-CREATE TABLE action_events (
-  event_id UUID PRIMARY KEY,
-  site_id VARCHAR(50) NOT NULL,
-  event_type VARCHAR(50) NOT NULL,
-  title VARCHAR(255) NOT NULL,
-  description TEXT,
-  scheduled_time TIMESTAMPTZ NOT NULL,
-  end_time TIMESTAMPTZ,
-  status VARCHAR(20) NOT NULL DEFAULT 'pending',
-  equipment JSONB DEFAULT '[]',
-  priority VARCHAR(20) DEFAULT 'medium',
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW(),
-  completed_at TIMESTAMPTZ,
-  error_message TEXT,
+Events are stored in MongoDB (per-site instance):
+- **Database**: `control`
+- **Collection**: `action_event`
 
-  INDEX idx_site_status (site_id, status),
-  INDEX idx_scheduled_time (scheduled_time)
-);
+Each site has its own MongoDB instance configured in `config/sites.yaml`.
 
--- Recurring Schedules table (optional)
-CREATE TABLE schedules (
-  schedule_id UUID PRIMARY KEY,
-  site_id VARCHAR(50) NOT NULL,
-  title VARCHAR(255) NOT NULL,
-  description TEXT,
-  recurrence VARCHAR(20) NOT NULL,  -- daily, weekly, monthly
-  day_of_week INT,                   -- 0-6 for weekly
-  day_of_month INT,                  -- 1-31 for monthly
-  time TIME NOT NULL,
-  equipment JSONB DEFAULT '[]',
-  is_active BOOLEAN DEFAULT true,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
+### MongoDB Document Structure
+
+```javascript
+{
+  "_id": "AUTO-SCHEDULE-2025Dec28-1700-Priority3-stop_chiller_sequence",
+  "action_id": "AUTO-SCHEDULE-2025Dec28-1700-Priority3-stop_chiller_sequence",
+  "action_type": "stop_chiller_sequence",
+  "description": null,
+  "payload": {
+    "chiller_id": "chiller_4",
+    "group_equipment": ["pchp_4", "cdp_4"],
+    "priority_index": 2,
+    "post_circulation": true,
+    "post_circulation_delay": 1800
+  },
+  "scheduled_time": ISODate("2025-12-28T10:00:00.000Z"),
+  "source": "chillerplantschedule",
+  "status": "pending",
+  "target_agent": "chillersequence"
+}
 ```
 
 ## Notes
 
-- All times should be in ISO 8601 format with timezone (site's local timezone preferred)
-- Equipment IDs should match device_ids from realtime data (e.g., `chiller_1`, `pchp_2`)
-- The `alert` event type can be triggered by AFDD system when faults are detected
-- Future: `optimization` events can be created by ML optimization system
+- All times are returned in ISO 8601 format with site's local timezone
+- Equipment IDs match device_ids from realtime data (e.g., `chiller_1`, `pchp_2`)
+- Events are created by `alto-cero-automation-backend` (chiller sequences, schedules)
+- The API is **READ-ONLY** - it only reads from MongoDB, never writes

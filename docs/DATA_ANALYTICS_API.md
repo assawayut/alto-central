@@ -1,9 +1,13 @@
 # Data Analytics API Requirements
 
-This document defines the API endpoint needed for the Data Analytics feature in the frontend.
+This document defines the API endpoints needed for the Data Analytics feature in the frontend.
 
-> **Scope**: This API is for **water-side (chiller plant) analytics only**.
+> **Scope**: These APIs are for **water-side (chiller plant) analytics only**.
 > Air-side analytics (AHUs, fans) will use a separate endpoint (`/analytics/airside-performance`) when needed.
+
+## Table of Contents
+1. [Plant Performance API](#plant-performance-scatter-plot-api-water-side)
+2. [Cooling Tower Trade-off API](#cooling-tower-trade-off-api)
 
 ---
 
@@ -268,4 +272,188 @@ curl "http://localhost:8642/api/v1/sites/kspo/analytics/plant-performance?start_
 
 # 1-minute resolution for detailed analysis (last month)
 curl "http://localhost:8642/api/v1/sites/kspo/analytics/plant-performance?start_date=2025-11-28&end_date=2025-12-28&resolution=1m"
+```
+
+---
+
+## Cooling Tower Trade-off API
+
+### Endpoint
+```
+GET /api/v1/sites/{site_id}/analytics/cooling-tower-tradeoff
+```
+
+### Purpose
+Provides data for analyzing the trade-off between chiller power and cooling tower power at different condenser water supply temperatures (CDS). This helps find the optimal CDS setpoint that minimizes total power consumption.
+
+**Trade-off concept:**
+- Lower CDS → Chillers more efficient (less power) BUT cooling towers work harder (more power)
+- Higher CDS → Cooling towers work less (less power) BUT chillers less efficient (more power)
+- **Optimal CDS** = Point where Total Power (Chiller + CT) is minimized
+
+---
+
+### Query Parameters
+
+| Parameter | Required | Default | Options | Description |
+|-----------|----------|---------|---------|-------------|
+| `start_date` | No | 3 months ago | `YYYY-MM-DD` | Start of date range |
+| `end_date` | No | today | `YYYY-MM-DD` | End of date range |
+| `resolution` | No | `1h` | `1m`, `15m`, `1h` | Time resolution |
+| `start_time` | No | `00:00` | `HH:MM` | Filter by time of day (start) |
+| `end_time` | No | `23:59` | `HH:MM` | Filter by time of day (end) |
+| `day_type` | No | `all` | `all`, `weekdays`, `weekends` | Filter by day type |
+
+---
+
+### Response Structure
+
+```typescript
+interface CoolingTowerTradeoffResponse {
+  site_id: string;
+  start_date: string;
+  end_date: string;
+  resolution: string;
+  filters: {
+    start_time: string;
+    end_time: string;
+    day_type: string;
+  };
+  count: number;
+  data: Array<{
+    timestamp: string;           // ISO 8601 with timezone
+    cds: number;                 // Condenser water supply temp (°F) - X-axis
+    power_chillers: number;      // Total chiller power (kW)
+    power_cts: number;           // Total cooling tower power (kW)
+    outdoor_wbt: number;         // Outdoor wet-bulb temp (°F) - for filtering
+    cooling_load: number;        // Cooling load (RT) - for filtering
+  }>;
+}
+```
+
+### Data Source Mapping
+
+| Response Field | Device ID | Datapoint |
+|----------------|-----------|-----------|
+| `cds` | `condenser_water_loop` | `supply_water_temperature` |
+| `power_chillers` | `plant` | `power_all_chillers` |
+| `power_cts` | `plant` | `power_all_cts` |
+| `outdoor_wbt` | `outdoor_weather_station` | `wetbulb_temperature` |
+| `cooling_load` | `plant` | `cooling_rate` |
+
+---
+
+### Example Request
+
+```bash
+# Get 3 months of data at 15-min resolution
+curl "http://localhost:8642/api/v1/sites/kspo/analytics/cooling-tower-tradeoff?start_date=2025-09-28&end_date=2025-12-28&resolution=15m"
+```
+
+---
+
+### Example Response
+
+```json
+{
+  "site_id": "kspo",
+  "start_date": "2025-09-28",
+  "end_date": "2025-12-28",
+  "resolution": "15m",
+  "filters": {
+    "start_time": "00:00",
+    "end_time": "23:59",
+    "day_type": "all"
+  },
+  "count": 2500,
+  "data": [
+    {
+      "timestamp": "2025-10-15T14:00:00+07:00",
+      "cds": 85.2,
+      "power_chillers": 950,
+      "power_cts": 120,
+      "outdoor_wbt": 78.5,
+      "cooling_load": 1850
+    },
+    {
+      "timestamp": "2025-10-15T14:15:00+07:00",
+      "cds": 86.1,
+      "power_chillers": 980,
+      "power_cts": 105,
+      "outdoor_wbt": 78.8,
+      "cooling_load": 1920
+    }
+  ]
+}
+```
+
+---
+
+### Frontend Processing
+
+The frontend will:
+
+1. **Filter by conditions** (user-selected):
+   - Outdoor WBT range (e.g., 75-78°F, 78-81°F)
+   - Cooling Load range (e.g., 1500-1800 RT, 1800-2100 RT)
+
+2. **Group by CDS bins** (e.g., 1°F bins: 82-83, 83-84, 84-85°F)
+
+3. **Calculate averages** for each CDS bin:
+   - Average Chiller Power
+   - Average CT Power
+   - Total Power = Chiller + CT
+
+4. **Plot 3 lines** on same chart:
+   - X-axis: CDS (°F)
+   - Y-axis: Power (kW)
+   - Blue line: Chiller Power
+   - Orange line: CT Power
+   - Green line: Total Power (shows optimal point at minimum)
+
+---
+
+### Frontend Use Cases
+
+#### 1. Find Optimal CDS for Current Conditions
+```
+Request: GET /analytics/cooling-tower-tradeoff?start_date=2025-11-28&end_date=2025-12-28&resolution=15m
+Frontend Filter: outdoor_wbt = 76-79°F, cooling_load = 1800-2100 RT
+Result: Line chart showing optimal CDS is ~84°F where total power is minimum
+```
+
+#### 2. Compare Optimal CDS Across Different WBT Conditions
+```
+Request: GET /analytics/cooling-tower-tradeoff?start_date=2025-09-28&end_date=2025-12-28&resolution=1h
+Frontend: Create multiple charts for different WBT bins
+- WBT 72-75°F → Optimal CDS ~82°F
+- WBT 75-78°F → Optimal CDS ~84°F
+- WBT 78-81°F → Optimal CDS ~86°F
+```
+
+---
+
+### Backend Implementation Notes
+
+1. **Data Source**: Query from appropriate resolution table (1m/15m/1h)
+
+2. **Skip invalid data**: Exclude records where:
+   - `cooling_load < 100 RT` (plant barely running)
+   - `power_chillers = 0` or `power_cts = 0` (equipment off)
+
+3. **Timezone**: All timestamps in site's local timezone
+
+---
+
+### Testing
+
+```bash
+# Basic request
+curl "http://localhost:8642/api/v1/sites/kspo/analytics/cooling-tower-tradeoff"
+
+# Custom date range with 15-min resolution
+curl "http://localhost:8642/api/v1/sites/kspo/analytics/cooling-tower-tradeoff?start_date=2025-10-01&end_date=2025-12-28&resolution=15m"
+
+# Business hours only
+curl "http://localhost:8642/api/v1/sites/kspo/analytics/cooling-tower-tradeoff?start_time=08:00&end_time=18:00&day_type=weekdays"
 ```

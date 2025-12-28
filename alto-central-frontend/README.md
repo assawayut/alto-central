@@ -133,6 +133,7 @@ sites:
 | `GET /sites/{siteId}/timeseries/aggregated` | Historical data for charts |
 | `GET /sites/{siteId}/analytics/plant-performance` | Plant performance scatter plot data |
 | `GET /sites/{siteId}/analytics/cooling-tower-tradeoff` | CT trade-off analysis data |
+| `GET /sites/{siteId}/events/upcoming` | Upcoming scheduled events |
 
 ### Timeseries Query Parameters
 | Parameter | Default | Options | Description |
@@ -210,6 +211,7 @@ sites:
 | `DataAnalyticsCard` | Opens DataAnalyticsModal |
 | `DataAnalyticsModal` | Container with 3 tabs for analytics |
 | `CoolingTowerTradeoffTab` | `/analytics/cooling-tower-tradeoff` API (line chart: CDS vs Power) |
+| `UpcomingEventsCard` | `/events/upcoming` API (scheduled chiller sequences, maintenance) |
 | `OptimizationCard` | Placeholder for future ML optimization features |
 
 ## Development
