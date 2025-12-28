@@ -132,6 +132,7 @@ sites:
 | `GET /sites/{siteId}/energy/daily` | Yesterday vs Today energy |
 | `GET /sites/{siteId}/timeseries/aggregated` | Historical data for charts |
 | `GET /sites/{siteId}/analytics/plant-performance` | Plant performance scatter plot data |
+| `GET /sites/{siteId}/analytics/cooling-tower-tradeoff` | CT trade-off analysis data |
 
 ### Timeseries Query Parameters
 | Parameter | Default | Options | Description |
@@ -141,7 +142,7 @@ sites:
 | `period` | `24h` | `24h`, `7d`, `30d`, `today`, `yesterday` | Time range |
 | `aggregation` | `hourly` | `hourly`, `daily` | Aggregation level |
 
-### Plant Performance Analytics Parameters
+### Analytics Parameters (Plant Performance & CT Trade-off)
 | Parameter | Default | Options | Description |
 |-----------|---------|---------|-------------|
 | `start_date` | - | `YYYY-MM-DD` | Start date for query |
@@ -207,7 +208,8 @@ sites:
 | `PlantEquipmentModal` | Device details with efficiency from `plant.efficiency_*` |
 | `EfficiencyCard` | `plant.efficiency` |
 | `DataAnalyticsCard` | Opens DataAnalyticsModal |
-| `DataAnalyticsModal` | `/analytics/plant-performance` API (ECharts scatter plot) |
+| `DataAnalyticsModal` | Container with 3 tabs for analytics |
+| `CoolingTowerTradeoffTab` | `/analytics/cooling-tower-tradeoff` API (line chart: CDS vs Power) |
 | `OptimizationCard` | Placeholder for future ML optimization features |
 
 ## Development
