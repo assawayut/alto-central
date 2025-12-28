@@ -96,8 +96,14 @@ uvicorn app.main:app --reload --port 8642
 | Endpoint | Description |
 |----------|-------------|
 | `POST /api/v1/sites/{site_id}/timeseries/query` | Custom timeseries query with resampling |
-| `GET /api/v1/sites/{site_id}/timeseries/aggregated` | Pre-aggregated data (24h/7d/30d) |
+| `GET /api/v1/sites/{site_id}/timeseries/aggregated` | Pre-aggregated data (24h/7d/30d/today/yesterday) |
 | `GET /api/v1/sites/{site_id}/timeseries/latest-from-history` | Latest values from TimescaleDB |
+
+### Analytics
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/v1/sites/{site_id}/analytics/plant-performance` | Plant performance scatter plot data |
 
 ## Site Configuration
 
@@ -226,8 +232,66 @@ GET /api/v1/sites/kspo/timeseries/aggregated?device_id=plant&datapoint=power&per
 **Query parameters:**
 - `device_id`: Device identifier (default: `plant`)
 - `datapoint`: Datapoint name (default: `power`)
-- `period`: Time period - `24h`, `7d`, `30d` (default: `24h`)
+- `period`: Time period - `24h`, `7d`, `30d`, `today`, `yesterday` (default: `24h`)
 - `aggregation`: Aggregation level - `hourly`, `daily` (default: `hourly`)
+
+> **Note:** `today` and `yesterday` use the site's local timezone (from sites.yaml)
+
+### Plant Performance Analytics (`/analytics/plant-performance`)
+
+```
+GET /api/v1/sites/kspo/analytics/plant-performance?resolution=1h&start_date=2025-12-01&end_date=2025-12-28
+```
+
+```json
+{
+  "site_id": "kspo",
+  "start_date": "2025-12-01",
+  "end_date": "2025-12-28",
+  "resolution": "1h",
+  "filters": {
+    "start_time": "00:00",
+    "end_time": "23:59",
+    "day_type": "all"
+  },
+  "count": 245,
+  "data": [
+    {
+      "timestamp": "2025-12-27T08:00:00+07:00",
+      "cooling_load": 206.93,
+      "power": 183.4,
+      "efficiency": 0.8863,
+      "num_chillers": 1,
+      "chiller_combination": "CH-5",
+      "chs": 48.44,
+      "cds": 80.57,
+      "outdoor_wbt": 72.56,
+      "outdoor_dbt": 85.37
+    }
+  ]
+}
+```
+
+**Query parameters:**
+- `start_date`, `end_date`: Date range (default: last 3 months)
+- `resolution`: `1m`, `15m`, `1h` (default: `1h`)
+- `start_time`, `end_time`: Filter by time of day (e.g., `09:00` - `18:00`)
+- `day_type`: `all`, `weekdays`, `weekends` (default: `all`)
+
+**Response fields:**
+| Field | Unit | Description |
+|-------|------|-------------|
+| `cooling_load` | RT | Cooling load from `plant.cooling_rate` |
+| `power` | kW | Plant power from `plant.power` |
+| `efficiency` | kW/RT | Calculated as `power / cooling_load` |
+| `num_chillers` | count | Number of running chillers |
+| `chiller_combination` | string | Running chillers (e.g., "CH-1+CH-2") |
+| `chs` | °F | Chilled water supply temp |
+| `cds` | °F | Condenser water supply temp |
+| `outdoor_wbt` | °F | Outdoor wet-bulb temp |
+| `outdoor_dbt` | °F | Outdoor dry-bulb temp |
+
+> **Note:** Points with `cooling_load < 10 RT` are excluded to reduce noise.
 
 ## Project Structure
 
@@ -237,8 +301,9 @@ alto-central-backend/
 │   ├── api/v1/           # API endpoints
 │   │   ├── realtime.py   # Real-time data endpoints
 │   │   ├── energy.py     # Energy data endpoints
-│   │   ├── sites.py      # Sites listing
-│   │   └── timeseries.py # Historical queries
+│   │   ├── timeseries.py # Historical queries
+│   │   ├── analytics.py  # Plant performance analytics
+│   │   └── sites.py      # Sites listing
 │   ├── config/           # Configuration loading
 │   │   ├── sites.py      # sites.yaml parser
 │   │   └── settings.py   # App settings
