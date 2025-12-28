@@ -81,3 +81,38 @@ sites:
       supabase:
         url: http://10.144.140.149:8000
         anon_key: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyAgCiAgICAicm9sZSI6ICJhbm9uIiwKICAgICJpc3MiOiAic3VwYWJhc2UtZGVtbyIsCiAgICAiaWF0IjogMTY0MTc2OTIwMCwKICAgICJleHAiOiAxNzk5NTM1NjAwCn0.dc_X5iR_VP_qT0zsiyj_I_OZ2T9FtRU2BBNWN8Bu4GE
+
+  - site_id: densobpk
+    site_name: Denso (Thailand) Co., Ltd. (WGR)
+    site_code: DENSOBPK
+    latitude: 13.599091
+    longitude: 100.6725143
+    timezone: Asia/Bangkok
+    hvac_type: water
+    building_type: office
+    database:
+      timescaledb:
+        host: 10.144.27.81
+        port: 5432
+        database: postgres
+        user: postgres
+        password: Magicalmint@636
+
+  - site_id: uob
+    site_name: UOB Plaza Bangkok Building
+    site_code: UOB
+    latitude: 13.7296807
+    longitude: 100.2903772
+    timezone: Asia/Bangkok
+    hvac_type: water
+    building_type: office
+    database:
+      timescaledb:
+        host: 10.144.40.1
+        port: 5433
+        database: postgres
+        user: postgres
+        password: Magicalmint@636
+      supabase:
+        url: http://10.144.40.1:8000
+        anon_key: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyAgCiAgICAicm9sZSI6ICJhbm9uIiwKICAgICJpc3MiOiAic3VwYWJhc2UtZGVtbyIsCiAgICAiaWF0IjogMTY0MTc2OTIwMCwKICAgICJleHAiOiAxNzk5NTM1NjAwCn0.dc_X5iR_VP_qT0zsiyj_I_OZ2T9FtRU2BBNWN8Bu4GE

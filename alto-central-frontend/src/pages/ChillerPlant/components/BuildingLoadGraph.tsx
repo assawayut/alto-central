@@ -211,10 +211,24 @@ const BuildingLoadGraph: React.FC = () => {
       grid: {
         left: "3%",
         right: "4%",
-        bottom: "3%",
+        bottom: "15%",
         top: "15%",
         containLabel: true,
       },
+      dataZoom: [
+        {
+          type: 'inside',
+          xAxisIndex: 0,
+          filterMode: 'none',
+        },
+        {
+          type: 'slider',
+          xAxisIndex: 0,
+          bottom: 5,
+          height: 18,
+          filterMode: 'none',
+        },
+      ],
     });
   };
 

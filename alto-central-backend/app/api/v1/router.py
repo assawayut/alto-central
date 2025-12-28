@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter
 
-from app.api.v1 import sites, realtime, ontology, timeseries, energy, afdd, ml, optimization, chat
+from app.api.v1 import sites, realtime, ontology, timeseries, energy, afdd, ml, optimization, chat, analytics
 
 api_router = APIRouter()
 
@@ -42,6 +42,12 @@ api_router.include_router(
     afdd.router,
     prefix="/sites/{site_id}/afdd",
     tags=["AFDD Alerts"],
+)
+
+api_router.include_router(
+    analytics.router,
+    prefix="/sites/{site_id}/analytics",
+    tags=["Analytics"],
 )
 
 # Phase 2+ - ML, Optimization, LLM (stubs)

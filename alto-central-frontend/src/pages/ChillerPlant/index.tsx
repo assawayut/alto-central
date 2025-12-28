@@ -11,6 +11,8 @@ import WeatherStationCard from './components/WeatherStationCard'
 import PlantEquipmentCard from './components/PlantEquipmentCard'
 import PlantDiagram from './components/PlantDiagram'
 import UpcomingEventsCard from './components/UpcomingEventsCard'
+import DataAnalyticsCard from './components/DataAnalyticsCard'
+import OptimizationCard from './components/OptimizationCard'
 import { getSiteById, sites } from '@/config/sites'
 
 function ChillerPlantContent() {
@@ -27,9 +29,9 @@ function ChillerPlantContent() {
       showBack
       backTo="/"
     >
-      {/* Tab Navigation */}
-      <div className="mb-4">
-        <div className="inline-flex bg-white rounded-lg p-1 border border-border">
+      {/* Tab Navigation + Upcoming Events */}
+      <div className="mb-4 flex items-center justify-between gap-4">
+        <div className="inline-flex bg-white rounded-lg p-1 border border-border flex-shrink-0">
           <button className="px-4 py-2 text-sm font-medium bg-primary text-white rounded-md">
             Water-Side
           </button>
@@ -39,20 +41,23 @@ function ChillerPlantContent() {
             </button>
           )}
         </div>
+        <div className="flex-1 min-w-0">
+          <UpcomingEventsCard />
+        </div>
       </div>
 
-      {/* Main Layout: Left (20%) - Center (55%) - Right (25%) */}
+      {/* Main Layout: Left - Center - Right */}
       <div className="grid grid-cols-12 gap-4">
-        {/* Left Column - 20% */}
-        <div className="col-span-12 lg:col-span-3 xl:col-span-2 space-y-4">
+        {/* Left Column */}
+        <div className="col-span-12 lg:col-span-2 space-y-4">
           <EnergyUsageCard />
           <BuildingLoadGraph />
           <SystemAlertCard />
         </div>
 
-        {/* Center Column - 55% */}
-        <div className="col-span-12 lg:col-span-6 xl:col-span-7 space-y-4">
-          {/* Top Row: Efficiency, Power (with Cooling Load & Part-Load), Weather */}
+        {/* Center Column */}
+        <div className="col-span-12 lg:col-span-7 space-y-4">
+          {/* Top Row: Efficiency, Power, Weather */}
           <div className="grid grid-cols-12 gap-4">
             <div className="col-span-12 md:col-span-4">
               <EfficiencyCard
@@ -69,25 +74,23 @@ function ChillerPlantContent() {
             </div>
           </div>
 
-          {/* Bottom Row: System Status (left) + Plant Diagram (right) */}
+          {/* Bottom Row: System Status + Plant Diagram (compact) */}
           <div className="grid grid-cols-12 gap-4">
-            {/* Left Side: System Status */}
-            <div className="col-span-12 lg:col-span-5">
+            <div className="col-span-12 lg:col-span-6">
               <PlantEquipmentCard />
             </div>
-
-            {/* Right Side: Plant Diagram */}
-            <div className="col-span-12 lg:col-span-7">
-              <div className="alto-card p-4 h-full">
+            <div className="col-span-12 lg:col-span-6">
+              <div className="alto-card p-2 h-full">
                 <PlantDiagram variant="water-cooled" />
               </div>
             </div>
           </div>
         </div>
 
-        {/* Right Column - 25% */}
-        <div className="col-span-12 lg:col-span-3">
-          <UpcomingEventsCard />
+        {/* Right Column - Analytics & Optimization */}
+        <div className="col-span-12 lg:col-span-3 space-y-4">
+          <DataAnalyticsCard />
+          <OptimizationCard />
         </div>
       </div>
     </PageLayout>
