@@ -65,10 +65,12 @@ def get_date_range(
         site_tz: Site timezone
 
     Returns:
-        Tuple of (start_utc, end_utc) as timezone-aware datetimes
+        Tuple of (start_utc, end_utc) as timezone-aware datetimes.
+        end_utc is set to start of next day so SQL "timestamp < end_utc" includes all of end_date.
     """
     start_dt = datetime.combine(start_date, time(0, 0), tzinfo=site_tz)
-    end_dt = datetime.combine(end_date, time(23, 59, 59), tzinfo=site_tz)
+    # Set end to start of NEXT day so "< end_utc" includes all of end_date
+    end_dt = datetime.combine(end_date + timedelta(days=1), time(0, 0), tzinfo=site_tz)
     return (
         start_dt.astimezone(timezone.utc),
         end_dt.astimezone(timezone.utc),
