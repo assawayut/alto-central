@@ -59,11 +59,29 @@ class SupabaseConfig(BaseModel):
         return self.service_key or self.anon_key
 
 
+class MongoDBConfig(BaseModel):
+    """MongoDB connection configuration for a site."""
+
+    uri: str = ""
+
+    @property
+    def is_configured(self) -> bool:
+        """Check if MongoDB is properly configured."""
+        return bool(self.uri)
+
+    @property
+    def clean_uri(self) -> str:
+        """Get cleaned URI (remove double slashes at end)."""
+        uri = self.uri.rstrip("/")
+        return uri
+
+
 class SiteDatabaseConfig(BaseModel):
     """Database configuration for a site."""
 
     timescaledb: Optional[TimescaleConfig] = None
     supabase: Optional[SupabaseConfig] = None
+    mongodb: Optional[MongoDBConfig] = None
 
 
 class MapConfig(BaseModel):
@@ -100,6 +118,12 @@ class SiteConfig(BaseModel):
             return self.database.supabase
         return None
 
+    def get_mongodb_config(self) -> Optional[MongoDBConfig]:
+        """Get MongoDB config for this site."""
+        if self.database and self.database.mongodb:
+            return self.database.mongodb
+        return None
+
     @property
     def has_timescaledb(self) -> bool:
         """Check if site has TimescaleDB configured."""
@@ -110,6 +134,12 @@ class SiteConfig(BaseModel):
     def has_supabase(self) -> bool:
         """Check if site has Supabase configured."""
         config = self.get_supabase_config()
+        return config is not None and config.is_configured
+
+    @property
+    def has_mongodb(self) -> bool:
+        """Check if site has MongoDB configured."""
+        config = self.get_mongodb_config()
         return config is not None and config.is_configured
 
 
@@ -194,6 +224,14 @@ def get_site_supabase_config(site_id: str) -> Optional[SupabaseConfig]:
     site = get_site_by_id(site_id)
     if site:
         return site.get_supabase_config()
+    return None
+
+
+def get_site_mongodb_config(site_id: str) -> Optional[MongoDBConfig]:
+    """Get MongoDB configuration for a specific site."""
+    site = get_site_by_id(site_id)
+    if site:
+        return site.get_mongodb_config()
     return None
 
 

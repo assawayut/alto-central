@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter
 
-from app.api.v1 import sites, realtime, ontology, timeseries, energy, afdd, ml, optimization, chat, analytics
+from app.api.v1 import sites, realtime, ontology, timeseries, energy, afdd, ml, optimization, chat, analytics, events
 
 api_router = APIRouter()
 
@@ -48,6 +48,12 @@ api_router.include_router(
     analytics.router,
     prefix="/sites/{site_id}/analytics",
     tags=["Analytics"],
+)
+
+api_router.include_router(
+    events.router,
+    prefix="/sites/{site_id}/events",
+    tags=["Events"],
 )
 
 # Phase 2+ - ML, Optimization, LLM (stubs)

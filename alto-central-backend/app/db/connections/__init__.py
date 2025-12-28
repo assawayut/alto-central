@@ -3,6 +3,7 @@
 Per-site connection managers for:
 - Supabase (real-time data)
 - TimescaleDB (historical data)
+- MongoDB (action events)
 - Local PostgreSQL (app data)
 """
 
@@ -20,6 +21,14 @@ from app.db.connections.timescale import (
     get_timescale_manager,
     init_timescale,
     close_timescale,
+)
+from app.db.connections.mongodb import (
+    MongoDBConnection,
+    MongoDBConnectionManager,
+    get_mongodb,
+    get_mongodb_manager,
+    init_mongodb,
+    close_mongodb,
 )
 from app.db.connections.local import (
     LocalDatabase,
@@ -42,6 +51,13 @@ __all__ = [
     "get_timescale_manager",
     "init_timescale",
     "close_timescale",
+    # MongoDB (per-site)
+    "MongoDBConnection",
+    "MongoDBConnectionManager",
+    "get_mongodb",
+    "get_mongodb_manager",
+    "init_mongodb",
+    "close_mongodb",
     # Local DB
     "LocalDatabase",
     "get_local_db",

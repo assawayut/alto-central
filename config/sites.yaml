@@ -26,6 +26,8 @@ sites:
         database: postgres
         user: postgres
         password: Magicalmint@636
+      mongodb:
+        uri: mongodb://10.144.87.224:27017//
 
   - site_id: cp9
     site_name: Central Rama 9
@@ -42,6 +44,8 @@ sites:
         database: postgres
         user: postgres
         password: Magicalmint@636
+      mongodb:
+        uri: mongodb://10.144.65.134:27017//
 
   - site_id: kspo
     site_name: Bank of Ayudhya (Krungsri) - Phloen Chit Office
@@ -62,6 +66,8 @@ sites:
       supabase:
         url: http://10.144.168.147:8000
         anon_key: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyAgCiAgICAicm9sZSI6ICJhbm9uIiwKICAgICJpc3MiOiAic3VwYWJhc2UtZGVtbyIsCiAgICAiaWF0IjogMTY0MTc2OTIwMCwKICAgICJleHAiOiAxNzk5NTM1NjAwCn0.dc_X5iR_VP_qT0zsiyj_I_OZ2T9FtRU2BBNWN8Bu4GE
+      mongodb:
+        uri: mongodb://10.144.168.147:27017//
 
   - site_id: bla
     site_name: Bangkok Life Assurance Public Company Limited
@@ -81,6 +87,8 @@ sites:
       supabase:
         url: http://10.144.140.149:8000
         anon_key: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyAgCiAgICAicm9sZSI6ICJhbm9uIiwKICAgICJpc3MiOiAic3VwYWJhc2UtZGVtbyIsCiAgICAiaWF0IjogMTY0MTc2OTIwMCwKICAgICJleHAiOiAxNzk5NTM1NjAwCn0.dc_X5iR_VP_qT0zsiyj_I_OZ2T9FtRU2BBNWN8Bu4GE
+      mongodb:
+        uri: mongodb://10.144.140.149:27017//
 
   - site_id: densobpk
     site_name: Denso (Thailand) Co., Ltd. (WGR)
@@ -97,12 +105,14 @@ sites:
         database: postgres
         user: postgres
         password: Magicalmint@636
+      mongodb:
+        uri: mongodb://10.144.27.81:27017//
 
   - site_id: uob
     site_name: UOB Plaza Bangkok Building
     site_code: UOB
-    latitude: 13.7296807
-    longitude: 100.2903772
+    latitude: 13.7296
+    longitude: 100.5678861
     timezone: Asia/Bangkok
     hvac_type: water
     building_type: office
@@ -116,3 +126,5 @@ sites:
       supabase:
         url: http://10.144.40.1:8000
         anon_key: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyAgCiAgICAicm9sZSI6ICJhbm9uIiwKICAgICJpc3MiOiAic3VwYWJhc2UtZGVtbyIsCiAgICAiaWF0IjogMTY0MTc2OTIwMCwKICAgICJleHAiOiAxNzk5NTM1NjAwCn0.dc_X5iR_VP_qT0zsiyj_I_OZ2T9FtRU2BBNWN8Bu4GE
+      mongodb:
+        uri: mongodb://10.144.40.1:27017//

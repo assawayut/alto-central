@@ -28,11 +28,12 @@ Backend API for the Alto Central HVAC monitoring system. Provides real-time sens
 
 ## Data Sources
 
-| Source | Table | Purpose |
-|--------|-------|---------|
+| Source | Table/Collection | Purpose |
+|--------|------------------|---------|
 | Supabase | `latest_data` | Real-time sensor values (primary) |
 | TimescaleDB | `aggregated_data` | Real-time fallback + historical timeseries |
 | TimescaleDB | `daily_energy_data` | Daily aggregated energy data |
+| MongoDB | `control.action_event` | Action events (chiller sequences, schedules) |
 
 **Priority for real-time data:**
 1. Supabase `latest_data` (if configured for site)
@@ -105,6 +106,13 @@ uvicorn app.main:app --reload --port 8642
 |----------|-------------|
 | `GET /api/v1/sites/{site_id}/analytics/plant-performance` | Plant performance scatter plot data |
 | `GET /api/v1/sites/{site_id}/analytics/cooling-tower-tradeoff` | Chiller vs CT power trade-off data |
+
+### Events
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/v1/sites/{site_id}/events/` | All action events (MongoDB) |
+| `GET /api/v1/sites/{site_id}/events/upcoming` | Upcoming events for timeline |
 
 ## Site Configuration
 
@@ -338,6 +346,37 @@ GET /api/v1/sites/kspo/analytics/cooling-tower-tradeoff?resolution=15m&start_dat
 
 > **Note:** Points with `cooling_load < 100 RT`, `power_chillers <= 0`, or `power_cts <= 0` are excluded.
 
+### Action Events (`/events/`)
+
+```
+GET /api/v1/sites/kspo/events/?status=all&limit=20
+```
+
+```json
+{
+  "site_id": "kspo",
+  "events": [
+    {
+      "event_id": "evt_001",
+      "event_type": "start_chiller_sequence",
+      "title": "Start CH-1",
+      "description": null,
+      "scheduled_time": "2025-01-15T07:00:00+07:00",
+      "status": "pending",
+      "equipment": ["chiller_1"],
+      "source": "automation"
+    }
+  ],
+  "total_count": 1
+}
+```
+
+**Query parameters:**
+- `status`: Filter by status - `all`, `pending`, `in-progress`, `completed`, `failed` (default: `all`)
+- `limit`: Max events to return (default: `20`, max: `100`)
+
+**Event types:** `start_chiller_sequence`, `stop_chiller_sequence`, `schedule`
+
 ## Project Structure
 
 ```
@@ -348,6 +387,7 @@ alto-central-backend/
 │   │   ├── energy.py     # Energy data endpoints
 │   │   ├── timeseries.py # Historical queries
 │   │   ├── analytics.py  # Plant performance analytics
+│   │   ├── events.py     # Action events (MongoDB)
 │   │   └── sites.py      # Sites listing
 │   ├── config/           # Configuration loading
 │   │   ├── sites.py      # sites.yaml parser
@@ -356,7 +396,8 @@ alto-central-backend/
 │   ├── db/               # Database connections
 │   │   └── connections/
 │   │       ├── supabase.py    # Supabase client (httpx)
-│   │       └── timescale.py   # TimescaleDB client (asyncpg)
+│   │       ├── timescale.py   # TimescaleDB client (asyncpg)
+│   │       └── mongodb.py     # MongoDB client (motor)
 │   ├── models/           # Pydantic schemas
 │   └── main.py           # FastAPI app
 ├── config/               # Shared config (symlink to ../config)
