@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import * as echarts from 'echarts';
 import { FiX } from 'react-icons/fi';
 import { API_ENDPOINTS } from '@/config/api';
+import CoolingTowerTradeoffTab from './CoolingTowerTradeoffTab';
 
 interface DataPoint {
   timestamp: string;
@@ -32,12 +33,13 @@ const COLORS = [
 const SYMBOLS = ['circle', 'rect', 'triangle', 'diamond', 'pin', 'arrow'];
 
 // Label field options
-type LabelField = 'none' | 'num_chillers' | 'chiller_combination' | 'chs' | 'cds' | 'outdoor_wbt' | 'outdoor_dbt';
+type LabelField = 'none' | 'num_chillers' | 'chiller_combination' | 'chs' | 'cds' | 'outdoor_wbt' | 'outdoor_dbt' | 'month';
 
 const LABEL_OPTIONS: { value: LabelField; label: string; isContinuous: boolean }[] = [
   { value: 'none', label: 'None', isContinuous: false },
   { value: 'num_chillers', label: 'Number of Chillers', isContinuous: false },
   { value: 'chiller_combination', label: 'Chiller Combination', isContinuous: false },
+  { value: 'month', label: 'Month', isContinuous: false },
   { value: 'chs', label: 'CHS Temp (°F)', isContinuous: true },
   { value: 'cds', label: 'CDS Temp (°F)', isContinuous: true },
   { value: 'outdoor_wbt', label: 'Outdoor WBT (°F)', isContinuous: true },
@@ -59,11 +61,20 @@ function binValue(value: number, step: number): string {
   return `${binStart}-${binEnd}`;
 }
 
+// Month names for labeling
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
 // Get category value from data point
 function getCategoryValue(d: DataPoint, field: LabelField, binSize?: number): string {
   if (field === 'none') return 'all';
   if (field === 'num_chillers') return String(d.num_chillers);
   if (field === 'chiller_combination') return d.chiller_combination;
+
+  // Time-based fields
+  if (field === 'month') {
+    const date = new Date(d.timestamp);
+    return MONTH_NAMES[date.getMonth()];
+  }
 
   // Continuous fields need binning
   const value = d[field as keyof DataPoint] as number;
@@ -131,6 +142,9 @@ const DataAnalyticsModal: React.FC<DataAnalyticsModalProps> = ({ isOpen, onClose
   const handleDatePartFocus = (e: React.FocusEvent<HTMLInputElement>) => {
     e.target.select();
   };
+
+  // Active tab
+  const [activeTab, setActiveTab] = useState<'plant' | 'pump' | 'cooling-tower'>('plant');
 
   // Time resolution
   const [resolution, setResolution] = useState<'1m' | '15m' | '1h'>('1h');
@@ -355,8 +369,36 @@ const DataAnalyticsModal: React.FC<DataAnalyticsModalProps> = ({ isOpen, onClose
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
       <div className="relative bg-white rounded-lg shadow-xl w-[95vw] max-w-[1600px] h-[92vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b">
-          <h2 className="text-lg font-semibold text-[#065BA9]">Data Analytics - Plant Performance</h2>
+        <div className="flex items-center justify-between px-6 py-3 border-b">
+          <div className="flex items-center gap-6">
+            <h2 className="text-lg font-semibold text-[#065BA9]">Data Analytics</h2>
+            <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
+              <button
+                onClick={() => setActiveTab('plant')}
+                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                  activeTab === 'plant' ? 'bg-white text-[#065BA9] shadow-sm' : 'text-gray-600 hover:text-gray-800'
+                }`}
+              >
+                Plant Performance
+              </button>
+              <button
+                onClick={() => setActiveTab('pump')}
+                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                  activeTab === 'pump' ? 'bg-white text-[#065BA9] shadow-sm' : 'text-gray-600 hover:text-gray-800'
+                }`}
+              >
+                Pump Performance
+              </button>
+              <button
+                onClick={() => setActiveTab('cooling-tower')}
+                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                  activeTab === 'cooling-tower' ? 'bg-white text-[#065BA9] shadow-sm' : 'text-gray-600 hover:text-gray-800'
+                }`}
+              >
+                Cooling Tower Trade-off
+              </button>
+            </div>
+          </div>
           <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded">
             <FiX className="w-5 h-5" />
           </button>
@@ -364,6 +406,9 @@ const DataAnalyticsModal: React.FC<DataAnalyticsModalProps> = ({ isOpen, onClose
 
         {/* Content */}
         <div className="flex-1 flex overflow-hidden">
+          {/* Plant Performance Tab */}
+          {activeTab === 'plant' && (
+            <>
           {/* Filters Sidebar */}
           <div className="w-72 border-r p-4 space-y-4 overflow-y-auto">
             {/* Y-Axis */}
@@ -622,6 +667,23 @@ const DataAnalyticsModal: React.FC<DataAnalyticsModalProps> = ({ isOpen, onClose
               <div ref={chartRef} className="w-full h-full" />
             )}
           </div>
+            </>
+          )}
+
+          {/* Pump Performance Tab */}
+          {activeTab === 'pump' && (
+            <div className="flex-1 flex items-center justify-center">
+              <div className="text-center text-gray-400">
+                <div className="text-lg font-medium mb-2">Pump Performance</div>
+                <div className="text-sm">Coming Soon</div>
+              </div>
+            </div>
+          )}
+
+          {/* Cooling Tower Trade-off Tab */}
+          {activeTab === 'cooling-tower' && siteId && (
+            <CoolingTowerTradeoffTab siteId={siteId} />
+          )}
         </div>
       </div>
     </div>

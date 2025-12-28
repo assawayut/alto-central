@@ -50,6 +50,24 @@ export const API_ENDPOINTS = {
     if (params.day_type) searchParams.set('day_type', params.day_type);
     return `${API_BASE_URL}/sites/${siteId}/analytics/plant-performance?${searchParams}`;
   },
+
+  coolingTowerTradeoff: (siteId: string, params: {
+    start_date?: string;
+    end_date?: string;
+    resolution?: string;
+    start_time?: string;
+    end_time?: string;
+    day_type?: string;
+  }) => {
+    const searchParams = new URLSearchParams();
+    if (params.start_date) searchParams.set('start_date', params.start_date);
+    if (params.end_date) searchParams.set('end_date', params.end_date);
+    if (params.resolution) searchParams.set('resolution', params.resolution);
+    if (params.start_time) searchParams.set('start_time', params.start_time);
+    if (params.end_time) searchParams.set('end_time', params.end_time);
+    if (params.day_type) searchParams.set('day_type', params.day_type);
+    return `${API_BASE_URL}/sites/${siteId}/analytics/cooling-tower-tradeoff?${searchParams}`;
+  },
 };
 
 // Polling interval in milliseconds
