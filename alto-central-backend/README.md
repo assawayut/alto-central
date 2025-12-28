@@ -104,6 +104,7 @@ uvicorn app.main:app --reload --port 8642
 | Endpoint | Description |
 |----------|-------------|
 | `GET /api/v1/sites/{site_id}/analytics/plant-performance` | Plant performance scatter plot data |
+| `GET /api/v1/sites/{site_id}/analytics/cooling-tower-tradeoff` | Chiller vs CT power trade-off data |
 
 ## Site Configuration
 
@@ -292,6 +293,50 @@ GET /api/v1/sites/kspo/analytics/plant-performance?resolution=1h&start_date=2025
 | `outdoor_dbt` | °F | Outdoor dry-bulb temp |
 
 > **Note:** Points with `cooling_load < 10 RT` are excluded to reduce noise.
+
+### Cooling Tower Trade-off Analytics (`/analytics/cooling-tower-tradeoff`)
+
+```
+GET /api/v1/sites/kspo/analytics/cooling-tower-tradeoff?resolution=15m&start_date=2025-10-01&end_date=2025-12-28
+```
+
+```json
+{
+  "site_id": "kspo",
+  "start_date": "2025-10-01",
+  "end_date": "2025-12-28",
+  "resolution": "15m",
+  "filters": {
+    "start_time": "00:00",
+    "end_time": "23:59",
+    "day_type": "all"
+  },
+  "count": 2500,
+  "data": [
+    {
+      "timestamp": "2025-10-15T14:00:00+07:00",
+      "cds": 85.2,
+      "power_chillers": 950,
+      "power_cts": 120,
+      "outdoor_wbt": 78.5,
+      "cooling_load": 1850
+    }
+  ]
+}
+```
+
+**Query parameters:** Same as plant-performance endpoint.
+
+**Response fields:**
+| Field | Unit | Description |
+|-------|------|-------------|
+| `cds` | °F | Condenser water supply temp (X-axis) |
+| `power_chillers` | kW | Total chiller power |
+| `power_cts` | kW | Total cooling tower power |
+| `outdoor_wbt` | °F | Outdoor wet-bulb temp (for filtering) |
+| `cooling_load` | RT | Cooling load (for filtering) |
+
+> **Note:** Points with `cooling_load < 100 RT`, `power_chillers <= 0`, or `power_cts <= 0` are excluded.
 
 ## Project Structure
 

@@ -285,3 +285,218 @@ async def get_plant_performance(
         "count": len(data_points),
         "data": data_points,
     }
+
+
+@router.get(
+    "/cooling-tower-tradeoff",
+    summary="Get cooling tower trade-off analytics",
+    description="Analyze chiller vs cooling tower power trade-off at different CDS temperatures.",
+)
+async def get_cooling_tower_tradeoff(
+    site_id: str = Path(..., description="Site identifier"),
+    start_date: Optional[date] = Query(
+        None, description="Start date (YYYY-MM-DD). Default: 3 months ago"
+    ),
+    end_date: Optional[date] = Query(
+        None, description="End date (YYYY-MM-DD). Default: today"
+    ),
+    resolution: str = Query(
+        "1h", description="Data resolution", enum=["1m", "15m", "1h"]
+    ),
+    start_time: str = Query(
+        "00:00", description="Filter start time of day (HH:MM)"
+    ),
+    end_time: str = Query(
+        "23:59", description="Filter end time of day (HH:MM)"
+    ),
+    day_type: str = Query(
+        "all", description="Filter by day type", enum=["all", "weekdays", "weekends"]
+    ),
+) -> Dict:
+    """Get cooling tower trade-off analytics.
+
+    Returns data for analyzing the trade-off between chiller power and
+    cooling tower power at different condenser water supply temperatures.
+
+    Trade-off concept:
+    - Lower CDS → Chillers more efficient BUT cooling towers work harder
+    - Higher CDS → Cooling towers work less BUT chillers less efficient
+    - Optimal CDS = Point where Total Power (Chiller + CT) is minimized
+
+    Response fields:
+    - cds: Condenser water supply temp (°F)
+    - power_chillers: Total chiller power (kW)
+    - power_cts: Total cooling tower power (kW)
+    - outdoor_wbt: Outdoor wet-bulb temp (°F)
+    - cooling_load: Cooling load (RT)
+    """
+    # Get site timezone
+    site_tz = get_site_timezone(site_id)
+
+    # Calculate default date range (3 months ago to today)
+    today = datetime.now(site_tz).date()
+    if end_date is None:
+        end_date = today
+    if start_date is None:
+        start_date = end_date - timedelta(days=90)
+
+    # Parse time filters
+    filter_start_time = parse_time_filter(start_time, time(0, 0))
+    filter_end_time = parse_time_filter(end_time, time(23, 59))
+
+    # Convert dates to UTC for database query
+    start_utc, end_utc = get_date_range(start_date, end_date, site_tz)
+
+    # Get table name based on resolution
+    table_name = get_table_for_resolution(resolution)
+
+    # Get TimescaleDB connection
+    timescale = await get_timescale(site_id)
+
+    if not timescale.is_connected:
+        return {
+            "site_id": site_id,
+            "start_date": start_date.isoformat(),
+            "end_date": end_date.isoformat(),
+            "resolution": resolution,
+            "filters": {
+                "start_time": start_time,
+                "end_time": end_time,
+                "day_type": day_type,
+            },
+            "count": 0,
+            "data": [],
+            "message": "TimescaleDB not connected",
+        }
+
+    # Query plant-level data (power_all_chillers, power_all_cts, cooling_rate)
+    plant_query = f"""
+        SELECT timestamp, datapoint, value
+        FROM {table_name}
+        WHERE site_id = $1
+          AND device_id = 'plant'
+          AND datapoint IN ('power_all_chillers', 'power_all_cts', 'cooling_rate')
+          AND timestamp >= $2
+          AND timestamp < $3
+        ORDER BY timestamp
+    """
+
+    # Query condenser water supply temperature
+    cds_query = f"""
+        SELECT timestamp, value
+        FROM {table_name}
+        WHERE site_id = $1
+          AND device_id = 'condenser_water_loop'
+          AND datapoint = 'supply_water_temperature'
+          AND timestamp >= $2
+          AND timestamp < $3
+        ORDER BY timestamp
+    """
+
+    # Query outdoor wet-bulb temperature
+    wbt_query = f"""
+        SELECT timestamp, value
+        FROM {table_name}
+        WHERE site_id = $1
+          AND device_id = 'outdoor_weather_station'
+          AND datapoint = 'wetbulb_temperature'
+          AND timestamp >= $2
+          AND timestamp < $3
+        ORDER BY timestamp
+    """
+
+    try:
+        plant_rows = await timescale.fetch(plant_query, site_id, start_utc, end_utc)
+        cds_rows = await timescale.fetch(cds_query, site_id, start_utc, end_utc)
+        wbt_rows = await timescale.fetch(wbt_query, site_id, start_utc, end_utc)
+    except Exception as e:
+        return {
+            "site_id": site_id,
+            "start_date": start_date.isoformat(),
+            "end_date": end_date.isoformat(),
+            "resolution": resolution,
+            "error": str(e),
+            "count": 0,
+            "data": [],
+        }
+
+    # Pivot plant data by timestamp
+    plant_data: Dict[datetime, Dict[str, float]] = {}
+    for row in plant_rows:
+        ts = row["timestamp"]
+        dp = row["datapoint"]
+        val = row["value"]
+        if ts not in plant_data:
+            plant_data[ts] = {}
+        plant_data[ts][dp] = val
+
+    # Index CDS data by timestamp
+    cds_data: Dict[datetime, float] = {}
+    for row in cds_rows:
+        cds_data[row["timestamp"]] = row["value"]
+
+    # Index WBT data by timestamp
+    wbt_data: Dict[datetime, float] = {}
+    for row in wbt_rows:
+        wbt_data[row["timestamp"]] = row["value"]
+
+    # Build response data points
+    data_points = []
+    for ts in sorted(plant_data.keys()):
+        # Convert to site timezone for filtering and output
+        ts_local = to_local_timestamp(ts, site_tz)
+
+        # Apply time-of-day filter
+        if not filter_by_time_of_day(ts_local, filter_start_time, filter_end_time):
+            continue
+
+        # Apply day type filter
+        if not filter_by_day_type(ts_local, day_type):
+            continue
+
+        # Get plant values
+        vals = plant_data[ts]
+        power_chillers = vals.get("power_all_chillers")
+        power_cts = vals.get("power_all_cts")
+        cooling_load = vals.get("cooling_rate")
+
+        # Skip invalid data points
+        # - cooling_load < 100 RT (plant barely running)
+        # - power_chillers = 0 or power_cts = 0 (equipment off)
+        if cooling_load is None or cooling_load < 100:
+            continue
+        if power_chillers is None or power_chillers <= 0:
+            continue
+        if power_cts is None or power_cts <= 0:
+            continue
+
+        # Get CDS and WBT
+        cds = cds_data.get(ts)
+        outdoor_wbt = wbt_data.get(ts)
+
+        # Skip if CDS is missing
+        if cds is None:
+            continue
+
+        data_points.append({
+            "timestamp": ts_local.isoformat(),
+            "cds": round(cds, 2),
+            "power_chillers": round(power_chillers, 2),
+            "power_cts": round(power_cts, 2),
+            "outdoor_wbt": round(outdoor_wbt, 2) if outdoor_wbt is not None else None,
+            "cooling_load": round(cooling_load, 2),
+        })
+
+    return {
+        "site_id": site_id,
+        "start_date": start_date.isoformat(),
+        "end_date": end_date.isoformat(),
+        "resolution": resolution,
+        "filters": {
+            "start_time": start_time,
+            "end_time": end_time,
+            "day_type": day_type,
+        },
+        "count": len(data_points),
+        "data": data_points,
+    }
