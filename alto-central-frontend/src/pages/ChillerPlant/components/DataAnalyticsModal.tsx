@@ -285,12 +285,13 @@ const DataAnalyticsModal: React.FC<DataAnalyticsModalProps> = ({ isOpen, onClose
       toolbox: {
         feature: {
           dataZoom: {
-            yAxisIndex: 'none',
-            title: { zoom: 'Zoom', back: 'Reset' },
+            xAxisIndex: 0,
+            yAxisIndex: 0,
+            title: { zoom: 'Box Zoom', back: 'Reset Zoom' },
           },
-          restore: { title: 'Reset' },
+          restore: { title: 'Reset All' },
         },
-        right: Math.max(150, series.length > 6 ? 180 : 150) + 10,
+        right: Math.max(150, series.length > 6 ? 180 : 150) + 50,
         top: 10,
       },
       dataZoom: [
@@ -304,19 +305,12 @@ const DataAnalyticsModal: React.FC<DataAnalyticsModalProps> = ({ isOpen, onClose
           yAxisIndex: 0,
           filterMode: 'none',
         },
-        {
-          type: 'slider',
-          xAxisIndex: 0,
-          bottom: 10,
-          height: 20,
-          filterMode: 'none',
-        },
       ],
       grid: {
         left: 60,
-        right: Math.max(150, series.length > 6 ? 180 : 150),
+        right: Math.max(150, series.length > 6 ? 180 : 150) + 50,
         top: 40,
-        bottom: 60,
+        bottom: 40,
       },
       xAxis: {
         type: 'value',

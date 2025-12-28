@@ -211,9 +211,22 @@ const BuildingLoadGraph: React.FC = () => {
       grid: {
         left: "3%",
         right: "4%",
-        bottom: "15%",
-        top: "15%",
+        bottom: "5%",
+        top: "18%",
         containLabel: true,
+      },
+      toolbox: {
+        feature: {
+          dataZoom: {
+            xAxisIndex: 0,
+            yAxisIndex: 0,
+            title: { zoom: 'Box Zoom', back: 'Reset Zoom' },
+          },
+          restore: { title: 'Reset All' },
+        },
+        right: 10,
+        top: 0,
+        itemSize: 12,
       },
       dataZoom: [
         {
@@ -222,10 +235,8 @@ const BuildingLoadGraph: React.FC = () => {
           filterMode: 'none',
         },
         {
-          type: 'slider',
-          xAxisIndex: 0,
-          bottom: 5,
-          height: 18,
+          type: 'inside',
+          yAxisIndex: 0,
           filterMode: 'none',
         },
       ],
