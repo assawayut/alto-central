@@ -46,7 +46,7 @@ async def get_plant_performance(
     Returns time series data with:
     - cooling_load (RT), power (kW), efficiency (kW/RT)
     - num_chillers, chiller_combination
-    - chs_temp, cds_temp, outdoor_temp
+    - chs, cds, outdoor_wbt, outdoor_dbt
 
     Resolution determines which table to query:
     - 1m: aggregated_data
@@ -106,17 +106,49 @@ async def get_plant_performance(
             "message": "TimescaleDB not connected",
         }
 
-    # Query plant-level data
-    # Note: datapoint names in database:
-    # - cooling_rate = cooling load in RT
-    # - power = total plant power in kW
-    # - efficiency = pre-calculated kW/RT
+    # Query plant-level data (power, cooling_rate)
     plant_query = f"""
         SELECT timestamp, datapoint, value
         FROM {table_name}
         WHERE site_id = $1
           AND device_id = 'plant'
-          AND datapoint IN ('power', 'cooling_rate', 'efficiency')
+          AND datapoint IN ('power', 'cooling_rate')
+          AND timestamp >= $2
+          AND timestamp < $3
+        ORDER BY timestamp
+    """
+
+    # Query chilled water supply temperature
+    chs_query = f"""
+        SELECT timestamp, value
+        FROM {table_name}
+        WHERE site_id = $1
+          AND device_id = 'chilled_water_loop'
+          AND datapoint = 'supply_water_temperature'
+          AND timestamp >= $2
+          AND timestamp < $3
+        ORDER BY timestamp
+    """
+
+    # Query condenser water supply temperature
+    cds_query = f"""
+        SELECT timestamp, value
+        FROM {table_name}
+        WHERE site_id = $1
+          AND device_id = 'condenser_water_loop'
+          AND datapoint = 'supply_water_temperature'
+          AND timestamp >= $2
+          AND timestamp < $3
+        ORDER BY timestamp
+    """
+
+    # Query outdoor weather data
+    weather_query = f"""
+        SELECT timestamp, datapoint, value
+        FROM {table_name}
+        WHERE site_id = $1
+          AND device_id = 'outdoor_weather_station'
+          AND datapoint IN ('wetbulb_temperature', 'drybulb_temperature')
           AND timestamp >= $2
           AND timestamp < $3
         ORDER BY timestamp
@@ -127,7 +159,7 @@ async def get_plant_performance(
         SELECT timestamp, device_id, value
         FROM {table_name}
         WHERE site_id = $1
-          AND device_id LIKE 'ch%%'
+          AND device_id LIKE 'chiller_%%'
           AND datapoint = 'status_read'
           AND timestamp >= $2
           AND timestamp < $3
@@ -136,6 +168,9 @@ async def get_plant_performance(
 
     try:
         plant_rows = await timescale.fetch(plant_query, site_id, start_utc, end_utc)
+        chs_rows = await timescale.fetch(chs_query, site_id, start_utc, end_utc)
+        cds_rows = await timescale.fetch(cds_query, site_id, start_utc, end_utc)
+        weather_rows = await timescale.fetch(weather_query, site_id, start_utc, end_utc)
         chiller_rows = await timescale.fetch(chiller_query, site_id, start_utc, end_utc)
     except Exception as e:
         return {
@@ -157,6 +192,26 @@ async def get_plant_performance(
             plant_data[ts] = {}
         plant_data[ts][dp] = val
 
+    # Index CHS data by timestamp
+    chs_data: Dict[datetime, float] = {}
+    for row in chs_rows:
+        chs_data[row["timestamp"]] = row["value"]
+
+    # Index CDS data by timestamp
+    cds_data: Dict[datetime, float] = {}
+    for row in cds_rows:
+        cds_data[row["timestamp"]] = row["value"]
+
+    # Pivot weather data by timestamp
+    weather_data: Dict[datetime, Dict[str, float]] = {}
+    for row in weather_rows:
+        ts = row["timestamp"]
+        dp = row["datapoint"]
+        val = row["value"]
+        if ts not in weather_data:
+            weather_data[ts] = {}
+        weather_data[ts][dp] = val
+
     # Group chiller status by timestamp
     chiller_status: Dict[datetime, Dict[str, float]] = {}
     for row in chiller_rows:
@@ -170,7 +225,7 @@ async def get_plant_performance(
     # Build response data points
     data_points = []
     for ts in sorted(plant_data.keys()):
-        # Convert to site timezone for filtering
+        # Convert to site timezone for filtering and output
         ts_local = ts.astimezone(site_tz) if ts.tzinfo else ts.replace(tzinfo=timezone.utc).astimezone(site_tz)
 
         # Apply time-of-day filter
@@ -189,25 +244,44 @@ async def get_plant_performance(
         vals = plant_data[ts]
         power = vals.get("power")
         cooling_load = vals.get("cooling_rate")  # cooling_rate = cooling load in RT
-        efficiency = vals.get("efficiency")  # Pre-calculated kW/RT from database
+
+        # Skip data points where cooling_load < 10 RT (avoid noise at very low loads)
+        if cooling_load is None or cooling_load < 10:
+            continue
+
+        # Calculate efficiency (kW/RT)
+        efficiency = None
+        if power is not None and cooling_load > 0:
+            efficiency = power / cooling_load
 
         # Get running chillers
         chillers = chiller_status.get(ts, {})
         running_chillers = sorted([
-            ch_id.upper().replace("_", "-")
+            ch_id.replace("chiller_", "CH-")
             for ch_id, status in chillers.items()
             if status and status >= 1
         ])
         num_chillers = len(running_chillers)
         chiller_combination = "+".join(running_chillers) if running_chillers else None
 
+        # Get temperature data
+        chs = chs_data.get(ts)
+        cds = cds_data.get(ts)
+        weather = weather_data.get(ts, {})
+        outdoor_wbt = weather.get("wetbulb_temperature")
+        outdoor_dbt = weather.get("drybulb_temperature")
+
         data_points.append({
-            "timestamp": ts.isoformat(),
+            "timestamp": ts_local.isoformat(),  # Return in site's local timezone
             "cooling_load": round(cooling_load, 2) if cooling_load is not None else None,
             "power": round(power, 2) if power is not None else None,
             "efficiency": round(efficiency, 4) if efficiency is not None else None,
             "num_chillers": num_chillers,
             "chiller_combination": chiller_combination,
+            "chs": round(chs, 2) if chs is not None else None,
+            "cds": round(cds, 2) if cds is not None else None,
+            "outdoor_wbt": round(outdoor_wbt, 2) if outdoor_wbt is not None else None,
+            "outdoor_dbt": round(outdoor_dbt, 2) if outdoor_dbt is not None else None,
         })
 
     return {
