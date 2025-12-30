@@ -47,9 +47,11 @@ const BuildingLoadGraph: React.FC = () => {
     const chartInstance = echarts.init(chartRef.current);
     chartInstanceRef.current = chartInstance;
 
-    // Use rolling 24-hour window to match API's "24h" period
-    const endDateTime = DateTime.now();
-    const startDatetime = endDateTime.minus({ hours: 24 });
+    // Use midnight-to-midnight in site timezone
+    const timezone = site?.timezone || 'Asia/Bangkok';
+    const now = DateTime.now().setZone(timezone);
+    const startDatetime = now.startOf('day');
+    const endDateTime = startDatetime.plus({ days: 1 });
 
     // Create empty data arrays for initial display
     const emptyData = Array.from({ length: 24 }, (_, i) => [
@@ -94,13 +96,18 @@ const BuildingLoadGraph: React.FC = () => {
       },
       xAxis: {
         type: "time",
-        splitNumber: 8,
         min: startDatetime.toMillis(),
         max: endDateTime.toMillis(),
+        interval: 3600 * 1000 * 6, // 6 hours interval
         axisLabel: {
           formatter: function (params: number) {
-            const dt = DateTime.fromMillis(params).setZone(site?.timezone || 'Asia/Bangkok');
-            return dt.toFormat('HH:mm');
+            const dt = DateTime.fromMillis(params).setZone(timezone);
+            const hour = dt.hour;
+            // Show 24 at end of day instead of 0
+            if (hour === 0 && params >= endDateTime.toMillis() - 1000) {
+              return '24';
+            }
+            return hour.toString();
           },
           margin: 12,
           fontSize: 12,
@@ -216,17 +223,7 @@ const BuildingLoadGraph: React.FC = () => {
         containLabel: true,
       },
       toolbox: {
-        feature: {
-          dataZoom: {
-            xAxisIndex: 0,
-            yAxisIndex: 0,
-            title: { zoom: 'Box Zoom', back: 'Reset Zoom' },
-          },
-          restore: { title: 'Reset All' },
-        },
-        right: 10,
-        top: 0,
-        itemSize: 12,
+        show: false,
       },
       dataZoom: [
         {
@@ -354,7 +351,7 @@ const BuildingLoadGraph: React.FC = () => {
       const url = API_ENDPOINTS.timeseriesAggregated(siteId, {
         device_id: 'plant',
         datapoint,
-        period: '24h',
+        period: 'today',
         aggregation: 'hourly'
       });
       const response = await fetch(url);
