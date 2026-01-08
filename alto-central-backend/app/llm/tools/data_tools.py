@@ -329,16 +329,40 @@ Example: "compare chiller_1 and chiller_2" -> use device_ids=["chiller_1", "chil
 }
 
 
-def _parse_relative_time(time_str: str) -> datetime:
-    """Parse relative time string like '7d', '24h', '1h' to datetime."""
+def _parse_relative_time(time_str: str, is_end: bool = False) -> datetime:
+    """Parse relative time string like '7d', '24h', '1h' to datetime.
+
+    Also handles ISO 8601 interval format: '2025-12-01T00:00:00/2025-12-31T23:59:59'
+    When is_end=False, returns start time; when is_end=True, returns end time.
+
+    Naive datetimes (without timezone) are assumed to be UTC.
+    """
     now = datetime.now(timezone.utc)
 
     if time_str == "now":
         return now
 
+    def _ensure_tz(dt: datetime) -> datetime:
+        """Ensure datetime has timezone info (default to UTC if naive)."""
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=timezone.utc)
+        return dt
+
+    # Handle ISO 8601 interval format (start/end separated by /)
+    if "/" in time_str and "T" in time_str:
+        parts = time_str.split("/")
+        if len(parts) == 2:
+            target = parts[1] if is_end else parts[0]
+            try:
+                dt = datetime.fromisoformat(target.replace("Z", "+00:00"))
+                return _ensure_tz(dt)
+            except ValueError:
+                pass
+
     # Try to parse as ISO timestamp first
     try:
-        return datetime.fromisoformat(time_str.replace("Z", "+00:00"))
+        dt = datetime.fromisoformat(time_str.replace("Z", "+00:00"))
+        return _ensure_tz(dt)
     except ValueError:
         pass
 
@@ -388,8 +412,8 @@ async def execute_query_timeseries(
         }
     """
     try:
-        start_dt = _parse_relative_time(start_time)
-        end_dt = _parse_relative_time(end_time)
+        start_dt = _parse_relative_time(start_time, is_end=False)
+        end_dt = _parse_relative_time(end_time, is_end=True)
 
         timescale = await get_timescale(site_id)
         if not timescale.is_connected:
@@ -560,8 +584,8 @@ async def execute_aggregate_data(
         }
     """
     try:
-        start_dt = _parse_relative_time(start_time)
-        end_dt = _parse_relative_time(end_time)
+        start_dt = _parse_relative_time(start_time, is_end=False)
+        end_dt = _parse_relative_time(end_time, is_end=True)
 
         timescale = await get_timescale(site_id)
         if not timescale.is_connected:

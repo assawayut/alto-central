@@ -581,13 +581,27 @@ async def execute_labeled_scatter_chart(
     logger.info(f"[LABELED_SCATTER] Time: {time_range}, Resolution: {resolution}")
 
     try:
+        # Handle ISO 8601 interval format (start/end separated by /)
+        if "/" in time_range and "T" in time_range:
+            parts = time_range.split("/")
+            if len(parts) == 2:
+                start_time = parts[0]
+                end_time = parts[1]
+                logger.info(f"[LABELED_SCATTER] Parsed interval: {start_time} to {end_time}")
+            else:
+                start_time = time_range
+                end_time = "now"
+        else:
+            start_time = time_range
+            end_time = "now"
+
         # Step 1: Query plant data
         plant_result = await execute_query_timeseries(
             site_id=site_id,
             device_id="plant",
             datapoints=["power", "cooling_rate"],
-            start_time=time_range,
-            end_time="now",
+            start_time=start_time,
+            end_time=end_time,
             resample=resolution,
             filter_outliers=True,
             min_load=min_cooling_load,
@@ -616,8 +630,8 @@ async def execute_labeled_scatter_chart(
             site_id=site_id,
             device_ids=chiller_ids,
             datapoints=["status_read"],
-            start_time=time_range,
-            end_time="now",
+            start_time=start_time,
+            end_time=end_time,
             resample=resolution,
         )
 
@@ -1113,7 +1127,9 @@ async def execute_query_and_chart(
 ) -> Dict[str, Any]:
     """Execute combined query and chart creation."""
     from app.llm.tools.data_tools import execute_query_timeseries
-    from datetime import datetime
+    from app.config import get_site_by_id
+    from datetime import datetime, timezone
+    from zoneinfo import ZoneInfo
 
     logger.info(f"[QUERY_AND_CHART] Starting: devices={device_ids}, metrics={metrics}, type={chart_type}")
     if compare_periods:
@@ -1176,6 +1192,38 @@ async def execute_query_and_chart(
 
         if not all_data:
             return {"success": False, "error": "No data returned from queries"}
+
+        # Convert timestamps to site's local timezone
+        site = get_site_by_id(site_id)
+        site_tz = ZoneInfo(site.timezone if site else "Asia/Bangkok")
+
+        def convert_to_local(ts_str: str) -> str:
+            """Convert UTC timestamp to site's local timezone."""
+            try:
+                # Parse the timestamp
+                if ts_str.endswith("Z"):
+                    dt = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+                elif "+" in ts_str or ts_str.count("-") > 2:
+                    dt = datetime.fromisoformat(ts_str)
+                else:
+                    # Assume UTC if no timezone
+                    dt = datetime.fromisoformat(ts_str).replace(tzinfo=timezone.utc)
+
+                # Convert to local timezone
+                local_dt = dt.astimezone(site_tz)
+                return local_dt.isoformat()
+            except Exception:
+                return ts_str
+
+        for record in all_data:
+            if "timestamp" in record:
+                record["timestamp"] = convert_to_local(record["timestamp"])
+
+        # Also update data_by_device for multi-device charts
+        for device_id in data_by_device:
+            for record in data_by_device[device_id]:
+                if "timestamp" in record:
+                    record["timestamp"] = convert_to_local(record["timestamp"])
 
         # Apply filters if specified
         if filters:
