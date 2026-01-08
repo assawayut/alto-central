@@ -325,10 +325,22 @@ class AnalyticsService:
                     query_summary_parts.append(f"{', '.join(devices)}: {total_points} points")
                     logger.info(f"[AI] query_and_chart: {devices} returned {total_points} points")
 
+                # Handle labeled_scatter_chart (server-side grouping)
+                elif tool == "labeled_scatter_chart":
+                    if result_data.get("plotly_spec"):
+                        plotly_spec = result_data["plotly_spec"]
+                        logger.info(f"[AI] Got plotly_spec from labeled_scatter_chart")
+                    summary = result_data.get("data_summary", {})
+                    groups = summary.get("groups", [])
+                    total_points = summary.get("total_points", 0)
+                    data_sources.append("timescale:plant")
+                    query_summary_parts.append(f"Grouped by {summary.get('label_by', 'unknown')}: {len(groups)} groups, {total_points} points")
+                    logger.info(f"[AI] labeled_scatter_chart: {len(groups)} groups, {total_points} points")
+
                 # Handle regular query tools
-                elif tool.startswith("query_"):
+                elif tool.startswith("query_") or tool.startswith("batch_query_"):
                     device_id = call.get("input", {}).get("device_id", "unknown")
-                    row_count = result_data.get("row_count", 0)
+                    row_count = result_data.get("row_count", result_data.get("total_rows", 0))
                     data_sources.append(f"timescale:{device_id}")
                     query_summary_parts.append(f"{device_id}: {row_count} rows")
                     logger.info(f"[AI] Query result: {device_id} returned {row_count} rows")
