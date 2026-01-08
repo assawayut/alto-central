@@ -134,6 +134,9 @@ sites:
 | `GET /sites/{siteId}/analytics/plant-performance` | Plant performance scatter plot data |
 | `GET /sites/{siteId}/analytics/cooling-tower-tradeoff` | CT trade-off analysis data |
 | `GET /sites/{siteId}/events/upcoming` | Upcoming scheduled events |
+| `POST /sites/{siteId}/ai-analytics/chart/stream` | AI chart generation (streaming) |
+| `POST /sites/{siteId}/ai-analytics/chart` | AI chart generation (non-streaming) |
+| `GET /sites/{siteId}/ai-analytics/templates` | List AI chart templates |
 
 ### Timeseries Query Parameters
 | Parameter | Default | Options | Description |
@@ -209,8 +212,9 @@ sites:
 | `PlantEquipmentModal` | Device details with efficiency from `plant.efficiency_*` |
 | `EfficiencyCard` | `plant.efficiency` |
 | `DataAnalyticsCard` | Opens DataAnalyticsModal |
-| `DataAnalyticsModal` | Container with 3 tabs for analytics |
+| `DataAnalyticsModal` | Container with 4 tabs for analytics |
 | `CoolingTowerTradeoffTab` | `/analytics/cooling-tower-tradeoff` API (line chart: CDS vs Power) |
+| `IntelligentAnalyticsTab` | AI-powered chart generation with chat interface, streaming support |
 | `UpcomingEventsCard` | `/events/upcoming` API (scheduled chiller sequences, maintenance) |
 | `OptimizationCard` | Placeholder for future ML optimization features |
 

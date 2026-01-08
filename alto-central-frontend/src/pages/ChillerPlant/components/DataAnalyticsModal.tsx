@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import * as echarts from 'echarts';
-import { FiX } from 'react-icons/fi';
+import { FiX, FiCpu } from 'react-icons/fi';
 import { API_ENDPOINTS } from '@/config/api';
 import CoolingTowerTradeoffTab from './CoolingTowerTradeoffTab';
+import IntelligentAnalyticsTab from './IntelligentAnalyticsTab';
 
 interface DataPoint {
   timestamp: string;
@@ -144,7 +145,7 @@ const DataAnalyticsModal: React.FC<DataAnalyticsModalProps> = ({ isOpen, onClose
   };
 
   // Active tab
-  const [activeTab, setActiveTab] = useState<'plant' | 'pump' | 'cooling-tower'>('plant');
+  const [activeTab, setActiveTab] = useState<'plant' | 'pump' | 'cooling-tower' | 'intelligent'>('plant');
 
   // Time resolution
   const [resolution, setResolution] = useState<'1m' | '15m' | '1h'>('1h');
@@ -396,6 +397,15 @@ const DataAnalyticsModal: React.FC<DataAnalyticsModalProps> = ({ isOpen, onClose
                 }`}
               >
                 Cooling Tower Trade-off
+              </button>
+              <button
+                onClick={() => setActiveTab('intelligent')}
+                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors flex items-center gap-1.5 ${
+                  activeTab === 'intelligent' ? 'bg-white text-[#065BA9] shadow-sm' : 'text-gray-600 hover:text-gray-800'
+                }`}
+              >
+                <FiCpu className="w-3.5 h-3.5" />
+                Intelligent Analytics
               </button>
             </div>
           </div>
@@ -683,6 +693,11 @@ const DataAnalyticsModal: React.FC<DataAnalyticsModalProps> = ({ isOpen, onClose
           {/* Cooling Tower Trade-off Tab */}
           {activeTab === 'cooling-tower' && siteId && (
             <CoolingTowerTradeoffTab siteId={siteId} />
+          )}
+
+          {/* Intelligent Analytics Tab */}
+          {activeTab === 'intelligent' && siteId && (
+            <IntelligentAnalyticsTab siteId={siteId} />
           )}
         </div>
       </div>

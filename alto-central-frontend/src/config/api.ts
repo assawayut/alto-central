@@ -85,6 +85,16 @@ export const API_ENDPOINTS = {
     const query = searchParams.toString();
     return `${API_BASE_URL}/sites/${siteId}/events/upcoming${query ? `?${query}` : ''}`;
   },
+
+  // AI Analytics
+  aiAnalyticsChart: (siteId: string) => `${API_BASE_URL}/sites/${siteId}/ai-analytics/chart`,
+  aiAnalyticsChartStream: (siteId: string) => `${API_BASE_URL}/sites/${siteId}/ai-analytics/chart/stream`,
+  aiAnalyticsTemplateChart: (siteId: string, templateId: string) =>
+    `${API_BASE_URL}/sites/${siteId}/ai-analytics/chart/from-template/${templateId}`,
+  aiAnalyticsTemplates: (siteId: string, category?: string) => {
+    const params = category ? `?category=${category}` : '';
+    return `${API_BASE_URL}/sites/${siteId}/ai-analytics/templates${params}`;
+  },
 };
 
 // Polling interval in milliseconds
