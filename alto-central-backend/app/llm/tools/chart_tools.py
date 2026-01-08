@@ -323,6 +323,39 @@ Example traces input:
     },
 }
 
+CREATE_3D_SCATTER_CHART_TOOL = {
+    "name": "create_3d_scatter_chart",
+    "description": """Create a 3D scatter plot to visualize relationships between THREE variables.
+Use when user wants to see how 3 metrics relate (e.g., power vs cooling load vs wetbulb).
+
+Example: "3D plot of power, cooling load, and wetbulb temperature"
+- x_field: wetbulb_temperature
+- y_field: cooling_rate
+- z_field: power
+
+Can also color by a 4th variable using color_field.""",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "data": {
+                "type": "array",
+                "items": {"type": "object"},
+                "description": "Array of data records from query_timeseries",
+            },
+            "x_field": {"type": "string", "description": "Field for X-axis"},
+            "y_field": {"type": "string", "description": "Field for Y-axis"},
+            "z_field": {"type": "string", "description": "Field for Z-axis"},
+            "title": {"type": "string", "description": "Chart title"},
+            "x_label": {"type": "string", "description": "X-axis label"},
+            "y_label": {"type": "string", "description": "Y-axis label"},
+            "z_label": {"type": "string", "description": "Z-axis label"},
+            "color_field": {"type": "string", "description": "Optional field for color gradient"},
+            "color_label": {"type": "string", "description": "Label for colorbar"},
+        },
+        "required": ["data", "x_field", "y_field", "z_field", "title", "x_label", "y_label", "z_label"],
+    },
+}
+
 CREATE_MULTI_AXIS_CHART_TOOL = {
     "name": "create_multi_axis_chart",
     "description": """Create a chart with two y-axes for different scales.
@@ -420,6 +453,43 @@ def execute_create_scatter_chart(
         }
     except Exception as e:
         logger.error(f"create_scatter_chart failed: {e}")
+        return {"success": False, "error": str(e)}
+
+
+def execute_create_3d_scatter_chart(
+    data: List[Dict[str, Any]],
+    x_field: str,
+    y_field: str,
+    z_field: str,
+    title: str,
+    x_label: str,
+    y_label: str,
+    z_label: str,
+    color_field: Optional[str] = None,
+    color_label: Optional[str] = None,
+    **kwargs,
+) -> Dict[str, Any]:
+    """Execute 3D scatter chart creation."""
+    try:
+        spec = PlotlyBuilder.scatter_3d_chart(
+            data=data,
+            x_field=x_field,
+            y_field=y_field,
+            z_field=z_field,
+            title=title,
+            x_label=x_label,
+            y_label=y_label,
+            z_label=z_label,
+            color_field=color_field,
+            color_label=color_label,
+        )
+        return {
+            "success": True,
+            "chart_type": "scatter3d",
+            "plotly_spec": spec,
+        }
+    except Exception as e:
+        logger.error(f"create_3d_scatter_chart failed: {e}")
         return {"success": False, "error": str(e)}
 
 
@@ -1367,6 +1437,7 @@ async def execute_query_and_chart(
 TOOL_EXECUTORS = {
     "create_line_chart": execute_create_line_chart,
     "create_scatter_chart": execute_create_scatter_chart,
+    "create_3d_scatter_chart": execute_create_3d_scatter_chart,
     "create_bar_chart": execute_create_bar_chart,
     "create_multi_trace_scatter": execute_create_multi_trace_scatter,
     "create_multi_axis_chart": execute_create_multi_axis_chart,
@@ -1384,6 +1455,7 @@ CHART_TOOLS = [
     LABELED_SCATTER_CHART_TOOL,  # Server-side grouping for labeled scatter (much faster!)
     CREATE_LINE_CHART_TOOL,
     CREATE_SCATTER_CHART_TOOL,
+    CREATE_3D_SCATTER_CHART_TOOL,  # 3D scatter for 3-variable relationships
     CREATE_MULTI_TRACE_SCATTER_TOOL,  # For manual categorical labeling
     CREATE_BAR_CHART_TOOL,
     CREATE_MULTI_AXIS_CHART_TOOL,

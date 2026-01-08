@@ -378,6 +378,85 @@ class PlotlyBuilder:
         return {"data": traces, "layout": layout}
 
     @classmethod
+    def scatter_3d_chart(
+        cls,
+        data: List[Dict[str, Any]],
+        x_field: str,
+        y_field: str,
+        z_field: str,
+        title: str,
+        x_label: str,
+        y_label: str,
+        z_label: str,
+        color_field: Optional[str] = None,
+        color_label: Optional[str] = None,
+        marker_size: int = 5,
+        marker_opacity: float = 0.8,
+        colorscale: str = "Viridis",
+    ) -> Dict[str, Any]:
+        """Build a 3D scatter chart specification.
+
+        Args:
+            data: List of data records
+            x_field: Field name for x-axis
+            y_field: Field name for y-axis
+            z_field: Field name for z-axis
+            title: Chart title
+            x_label: X-axis label
+            y_label: Y-axis label
+            z_label: Z-axis label
+            color_field: Optional field for color scale
+            color_label: Label for colorbar
+            marker_size: Marker size
+            marker_opacity: Marker opacity
+            colorscale: Plotly colorscale name
+
+        Returns:
+            Complete Plotly figure specification
+        """
+        x_values = [d.get(x_field) for d in data]
+        y_values = [d.get(y_field) for d in data]
+        z_values = [d.get(z_field) for d in data]
+
+        marker = {
+            "size": marker_size,
+            "opacity": marker_opacity,
+        }
+
+        if color_field:
+            color_values = [d.get(color_field) for d in data]
+            marker["color"] = color_values
+            marker["colorscale"] = colorscale
+            marker["colorbar"] = {"title": color_label or color_field.replace("_", " ").title()}
+        else:
+            marker["color"] = cls.COLOR_PALETTE[0]
+
+        traces = [
+            {
+                "type": "scatter3d",
+                "mode": "markers",
+                "name": "Data Points",
+                "x": x_values,
+                "y": y_values,
+                "z": z_values,
+                "marker": marker,
+            }
+        ]
+
+        layout = {
+            "title": {"text": title, "x": 0.5},
+            "scene": {
+                "xaxis": {"title": x_label},
+                "yaxis": {"title": y_label},
+                "zaxis": {"title": z_label},
+            },
+            "margin": {"l": 0, "r": 0, "t": 50, "b": 0},
+            "paper_bgcolor": "rgba(0,0,0,0)",
+        }
+
+        return {"data": traces, "layout": layout}
+
+    @classmethod
     def grouped_bar_chart(
         cls,
         data: List[Dict[str, Any]],
