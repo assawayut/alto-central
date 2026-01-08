@@ -1,0 +1,93 @@
+template_id: daily_energy_profile
+version: "1.0.0"
+created_at: "2024-01-15T00:00:00Z"
+updated_at: "2024-01-15T00:00:00Z"
+created_by: system
+
+matching:
+  trigger_phrases:
+    - "daily energy"
+    - "energy profile"
+    - "hourly consumption"
+    - "daily load profile"
+    - "energy by hour"
+    - "average hourly"
+    - "typical day"
+  required_keywords: []
+  excluded_keywords: []
+  confidence_threshold: 0.7
+
+metadata:
+  title: "Daily Energy Profile"
+  description: "Bar chart showing average energy consumption by hour of day. Identify peak demand periods and load patterns."
+  category: energy
+  tags:
+    - energy
+    - daily
+    - profile
+    - bar
+    - hourly
+    - consumption
+  hvac_context: all
+
+data:
+  source: timescale
+  queries:
+    - query_id: plant_power
+      device_id: plant
+      datapoints:
+        - power
+  default_time_range:
+    type: relative
+    value: "30d"
+  resampling: "1h"
+  filters:
+    - field: power
+      operator: gt
+      value: 0
+  outlier_filter:
+    enabled: true
+    method: both
+    iqr_multiplier: 1.5
+
+chart:
+  type: bar
+  layout:
+    title: "Average Hourly Energy Consumption"
+    xaxis:
+      title: "Hour of Day"
+      field: hour
+      type: category
+    yaxis:
+      title: "Average Power (kW)"
+      field: avg_power
+  traces:
+    - name: "Average Power"
+      type: bar
+      mode: null
+      x_field: hour
+      y_field: avg_power
+      marker:
+        color: "#2ecc71"
+        opacity: 0.8
+  shapes: []
+  annotations: []
+
+parameters:
+  - name: date_range
+    type: date_range
+    default: "30d"
+    description: "Time period to average over"
+    required: false
+  - name: day_type
+    type: enum
+    default: "all"
+    description: "Filter by day type"
+    options:
+      - "all"
+      - "weekdays"
+      - "weekends"
+    required: false
+
+usage_count: 0
+success_rate: 1.0

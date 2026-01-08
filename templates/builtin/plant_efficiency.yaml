@@ -1,0 +1,104 @@
+template_id: plant_efficiency_vs_load
+version: "1.0.0"
+created_at: "2024-01-15T00:00:00Z"
+updated_at: "2024-01-15T00:00:00Z"
+created_by: system
+
+matching:
+  trigger_phrases:
+    - "plant efficiency"
+    - "kw per ton"
+    - "kwrt"
+    - "efficiency vs load"
+    - "plant performance scatter"
+    - "efficiency scatter"
+  required_keywords: []
+  excluded_keywords:
+    - "chiller efficiency"
+    - "individual chiller"
+  confidence_threshold: 0.7
+
+metadata:
+  title: "Plant Efficiency vs Cooling Load"
+  description: "Scatter plot showing overall plant efficiency (kW/RT) against cooling load. Useful for identifying optimal operating points."
+  category: performance
+  tags:
+    - efficiency
+    - scatter
+    - plant
+    - load
+    - performance
+  hvac_context: water
+
+data:
+  source: timescale
+  queries:
+    - query_id: plant_data
+      device_id: plant
+      datapoints:
+        - power
+        - cooling_rate
+      derived:
+        - name: efficiency
+          formula: "power / cooling_rate"
+          unit: "kW/RT"
+  default_time_range:
+    type: relative
+    value: "30d"
+  resampling: "1h"
+  filters:
+    - field: cooling_rate
+      operator: gte
+      value: 50
+  outlier_filter:
+    enabled: true
+    method: both
+    iqr_multiplier: 1.5
+    min_load: 50
+
+chart:
+  type: scatter
+  layout:
+    title: "Plant Efficiency vs Cooling Load"
+    xaxis:
+      title: "Cooling Load (RT)"
+      field: cooling_rate
+    yaxis:
+      title: "Efficiency (kW/RT)"
+      field: efficiency
+  traces:
+    - name: "Operating Points"
+      type: scatter
+      mode: markers
+      x_field: cooling_rate
+      y_field: efficiency
+      marker:
+        size: 6
+        opacity: 0.6
+        colorscale: Viridis
+  shapes: []
+  annotations: []
+
+parameters:
+  - name: date_range
+    type: date_range
+    default: "30d"
+    description: "Time period for analysis"
+    required: false
+  - name: min_load
+    type: number
+    default: 50
+    description: "Minimum cooling load filter (RT)"
+    required: false
+  - name: resolution
+    type: enum
+    default: "1h"
+    description: "Data resolution"
+    options:
+      - "15m"
+      - "1h"
+      - "1d"
+    required: false
+
+usage_count: 0
+success_rate: 1.0

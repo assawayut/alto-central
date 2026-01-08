@@ -65,9 +65,11 @@ class TimescaleConnection:
                 ssl=ssl_context,
                 min_size=2,
                 max_size=10,
+                command_timeout=30.0,  # 30 second timeout for queries
                 # Set default transaction to read-only for safety
                 server_settings={
                     "default_transaction_read_only": "on",
+                    "statement_timeout": "30000",  # 30 second statement timeout (ms)
                 },
             )
             self._connected = True

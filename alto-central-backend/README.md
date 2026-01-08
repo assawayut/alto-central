@@ -114,6 +114,18 @@ uvicorn app.main:app --reload --port 8642
 | `GET /api/v1/sites/{site_id}/events/` | All action events (MongoDB) |
 | `GET /api/v1/sites/{site_id}/events/upcoming` | Upcoming events for timeline |
 
+### AI-Powered Analytics
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/v1/sites/{site_id}/ai-analytics/chart` | POST | Generate chart from natural language prompt |
+| `/api/v1/sites/{site_id}/ai-analytics/chart/stream` | POST | Generate chart with SSE streaming progress |
+| `/api/v1/sites/{site_id}/ai-analytics/chart/from-template/{template_id}` | POST | Generate chart from specific template |
+| `/api/v1/sites/{site_id}/ai-analytics/templates` | GET | List available chart templates |
+| `/api/v1/sites/{site_id}/ai-analytics/templates` | POST | Create new custom template |
+| `/api/v1/sites/{site_id}/ai-analytics/templates/{template_id}` | GET | Get template details |
+| `/api/v1/sites/{site_id}/ai-analytics/templates/{template_id}` | DELETE | Delete custom template |
+
 ## Site Configuration
 
 Sites are configured in `config/sites.yaml` (shared with frontend):
@@ -377,32 +389,170 @@ GET /api/v1/sites/kspo/events/?status=all&limit=20
 
 **Event types:** `start_chiller_sequence`, `stop_chiller_sequence`, `schedule`
 
+### AI Analytics - Generate Chart (`/ai-analytics/chart`)
+
+```
+POST /api/v1/sites/kspo/ai-analytics/chart
+Content-Type: application/json
+
+{
+  "prompt": "Show me plant efficiency vs cooling load for the last 2 weeks",
+  "parameters": {
+    "resolution": "1h"
+  }
+}
+```
+
+```json
+{
+  "chart_id": "a1b2c3d4",
+  "plotly_spec": {
+    "data": [
+      {
+        "type": "scatter",
+        "mode": "markers",
+        "name": "Operating Points",
+        "x": [150, 200, 250, 300],
+        "y": [0.75, 0.72, 0.70, 0.68],
+        "marker": {"size": 6, "opacity": 0.7}
+      }
+    ],
+    "layout": {
+      "title": {"text": "Plant Efficiency vs Cooling Load"},
+      "xaxis": {"title": "Cooling Load (RT)"},
+      "yaxis": {"title": "Efficiency (kW/RT)"}
+    }
+  },
+  "template_used": "plant_efficiency_vs_load",
+  "template_match_confidence": 0.85,
+  "data_sources": ["timescale:plant"],
+  "query_summary": "Queried 336 data points",
+  "message": "Generated chart using 'Plant Efficiency vs Cooling Load' template."
+}
+```
+
+**Request fields:**
+- `prompt`: Natural language description of the chart you want
+- `parameters`: Optional overrides (date_range, resolution, device, etc.)
+
+**Response fields:**
+- `plotly_spec`: Complete Plotly.js specification - render with `Plotly.newPlot(div, spec.data, spec.layout)`
+- `template_used`: Template ID if matched, null if AI-generated
+- `template_match_confidence`: Confidence score (0-1) if template matched
+- `data_sources`: Data sources queried
+- `message`: Human-readable explanation
+
+**Example prompts:**
+| Prompt | Description |
+|--------|-------------|
+| "Show plant efficiency vs cooling load" | Scatter plot of kW/RT vs RT |
+| "Compare chiller_1 and chiller_2 power" | Multi-line comparison |
+| "Chiller_1 efficiency today vs yesterday" | Period comparison (x-axis: hour of day) |
+| "Plant efficiency when only chiller_2 running" | Filtered by equipment status |
+| "Power trend for the last 24 hours" | Line chart time series |
+
+**AI Tool Features:**
+
+The AI uses a `query_and_chart` tool with these capabilities:
+
+| Feature | Example | Description |
+|---------|---------|-------------|
+| Period comparison | `compare_periods: ["today", "yesterday"]` | Compare same metric across days (x-axis = hour) |
+| Equipment filter | `filters: {only_running: ["chiller_2"]}` | Only include data when device is running |
+| Exclusion filter | `filters: {not_running: ["chiller_1"]}` | Exclude data when device is running |
+| Chiller count | `filters: {num_chillers_running: 2}` | Filter by number of chillers running |
+| Load filter | `filters: {min_cooling_load: 100}` | Minimum cooling load threshold |
+| Time filter | `filters: {time_of_day: {start: 8, end: 18}}` | Filter by working hours |
+
+**Device ID patterns:**
+- `plant` - Aggregate plant data
+- `chiller_{N}` - Individual chillers (chiller_1, chiller_2, ...)
+- `ct_{N}` - Cooling towers
+- `pchp_{N}`, `schp_{N}`, `cdp_{N}` - Pumps
+- `chilled_water_loop`, `condenser_water_loop` - Water loops
+- `outdoor_weather_station` - Weather data
+
+### AI Analytics - List Templates (`/ai-analytics/templates`)
+
+```
+GET /api/v1/sites/kspo/ai-analytics/templates?category=performance
+```
+
+```json
+{
+  "templates": [
+    {
+      "template_id": "plant_efficiency_vs_load",
+      "title": "Plant Efficiency vs Cooling Load",
+      "description": "Scatter plot of kW/RT vs cooling load",
+      "category": "performance",
+      "created_by": "system",
+      "usage_count": 42,
+      "tags": ["efficiency", "scatter", "plant"]
+    }
+  ],
+  "total_count": 4,
+  "builtin_count": 4,
+  "custom_count": 0
+}
+```
+
+**Query parameters:**
+- `category`: Filter by category - `performance`, `energy`, `equipment`, `comparison`, `forecast`
+- `include_builtin`: Include system templates (default: true)
+- `include_custom`: Include AI/user-created templates (default: true)
+
+**Builtin templates:**
+| Template ID | Chart Type | Description |
+|-------------|------------|-------------|
+| `plant_efficiency_vs_load` | Scatter | Plant kW/RT efficiency vs cooling load |
+| `chiller_power_trend` | Line | Chiller power consumption over time |
+| `daily_energy_profile` | Bar | Average hourly energy consumption |
+| `temperature_comparison` | Multi-line | Supply/return temps with delta-T |
+
 ## Project Structure
 
 ```
 alto-central-backend/
 ├── app/
-│   ├── api/v1/           # API endpoints
-│   │   ├── realtime.py   # Real-time data endpoints
-│   │   ├── energy.py     # Energy data endpoints
-│   │   ├── timeseries.py # Historical queries
-│   │   ├── analytics.py  # Plant performance analytics
-│   │   ├── events.py     # Action events (MongoDB)
-│   │   └── sites.py      # Sites listing
-│   ├── config/           # Configuration loading
-│   │   ├── sites.py      # sites.yaml parser
-│   │   └── settings.py   # App settings
-│   ├── core/             # Core utilities
-│   ├── db/               # Database connections
+│   ├── api/v1/              # API endpoints
+│   │   ├── realtime.py      # Real-time data endpoints
+│   │   ├── energy.py        # Energy data endpoints
+│   │   ├── timeseries.py    # Historical queries
+│   │   ├── analytics.py     # Plant performance analytics
+│   │   ├── ai_analytics.py  # AI-powered chart generation
+│   │   ├── events.py        # Action events (MongoDB)
+│   │   └── sites.py         # Sites listing
+│   ├── analytics/           # AI analytics module
+│   │   ├── templates/       # Chart template system
+│   │   │   ├── schema.py    # Template Pydantic models
+│   │   │   ├── manager.py   # Template CRUD operations
+│   │   │   └── matcher.py   # NL prompt matching
+│   │   ├── charts/          # Chart generation
+│   │   │   └── plotly_builder.py  # Plotly spec builder
+│   │   └── service.py       # Main orchestrator
+│   ├── llm/                 # LLM integration
+│   │   ├── client.py        # Anthropic client wrapper
+│   │   ├── prompts/         # System prompts
+│   │   └── tools/           # AI tool definitions
+│   │       ├── data_tools.py    # Data querying tools
+│   │       ├── chart_tools.py   # Chart creation tools
+│   │       └── template_tools.py # Template management
+│   ├── config/              # Configuration loading
+│   ├── core/                # Core utilities
+│   ├── db/                  # Database connections
 │   │   └── connections/
 │   │       ├── supabase.py    # Supabase client (httpx)
 │   │       ├── timescale.py   # TimescaleDB client (asyncpg)
 │   │       └── mongodb.py     # MongoDB client (motor)
-│   ├── models/           # Pydantic schemas
-│   └── main.py           # FastAPI app
-├── config/               # Shared config (symlink to ../config)
-├── docker/               # Docker configuration
-└── tests/                # Test suite
+│   ├── models/              # Pydantic schemas
+│   └── main.py              # FastAPI app
+├── config/                  # Shared config (symlink to ../config)
+├── templates/               # Chart templates (YAML)
+│   ├── builtin/             # System templates
+│   └── custom/              # AI-generated templates
+├── docker/                  # Docker configuration
+└── tests/                   # Test suite
 ```
 
 ## Dependencies

@@ -1,0 +1,124 @@
+template_id: chiller_efficiency_comparison
+version: "1.0.0"
+created_at: "2024-01-15T00:00:00Z"
+updated_at: "2024-01-15T00:00:00Z"
+created_by: system
+
+matching:
+  trigger_phrases:
+    - "compare chiller efficiency"
+    - "compare efficiency"
+    - "chiller efficiency comparison"
+    - "efficiency comparison"
+    - "chiller 1 vs chiller 2 efficiency"
+  required_keywords:
+    - ["efficiency", "kw/rt", "kwrt", "kw per ton"]
+  excluded_keywords:
+    - "power only"
+    - "power usage"
+    - "power consumption"
+    - "temperature"
+  confidence_threshold: 0.7
+
+metadata:
+  title: "Chiller Efficiency Comparison"
+  description: "Compare efficiency (kW/RT) between multiple chillers. Useful for identifying which chiller performs better at various loads."
+  category: comparison
+  tags:
+    - chiller
+    - efficiency
+    - comparison
+    - scatter
+    - performance
+  hvac_context: water
+
+data:
+  source: timescale
+  queries:
+    - query_id: chiller1_data
+      device_id: chiller_1
+      datapoints:
+        - power
+        - cooling_rate
+      derived:
+        - name: efficiency_1
+          formula: "power / cooling_rate"
+          unit: "kW/RT"
+    - query_id: chiller2_data
+      device_id: chiller_2
+      datapoints:
+        - power
+        - cooling_rate
+      derived:
+        - name: efficiency_2
+          formula: "power / cooling_rate"
+          unit: "kW/RT"
+  default_time_range:
+    type: relative
+    value: "7d"
+  resampling: "1h"
+  filters:
+    - field: cooling_rate
+      operator: gte
+      value: 30
+  outlier_filter:
+    enabled: true
+    method: both
+    iqr_multiplier: 1.5
+    min_load: 30
+
+chart:
+  type: scatter
+  layout:
+    title: "Chiller Efficiency Comparison"
+    xaxis:
+      title: "Cooling Load (RT)"
+      field: cooling_rate
+    yaxis:
+      title: "Efficiency (kW/RT)"
+      field: efficiency
+  traces:
+    - name: "Chiller 1"
+      type: scatter
+      mode: markers
+      x_field: cooling_rate
+      y_field: efficiency_1
+      marker:
+        size: 6
+        opacity: 0.6
+        color: "#1f77b4"
+    - name: "Chiller 2"
+      type: scatter
+      mode: markers
+      x_field: cooling_rate
+      y_field: efficiency_2
+      marker:
+        size: 6
+        opacity: 0.6
+        color: "#ff7f0e"
+  shapes: []
+  annotations: []
+
+parameters:
+  - name: date_range
+    type: date_range
+    default: "7d"
+    description: "Time period for comparison"
+    required: false
+  - name: min_load
+    type: number
+    default: 30
+    description: "Minimum cooling load filter (RT)"
+    required: false
+  - name: resolution
+    type: enum
+    default: "1h"
+    description: "Data resolution"
+    options:
+      - "15m"
+      - "1h"
+      - "1d"
+    required: false
+
+usage_count: 0
+success_rate: 1.0

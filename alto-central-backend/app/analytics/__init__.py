@@ -1,10 +1,7 @@
-"""Data Analytics module (Phase 2+).
+"""AI-powered analytics module.
 
-This module will contain:
-- Data aggregation functions
-- KPI calculators
-- Report generators
-- Data processors
+This module provides:
+- Chart template management
+- AI-driven chart generation
+- Plotly spec building
 """
-
-# Placeholder - will be implemented in Phase 2

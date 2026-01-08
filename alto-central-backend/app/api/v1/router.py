@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter
 
-from app.api.v1 import sites, realtime, ontology, timeseries, energy, afdd, ml, optimization, chat, analytics, events
+from app.api.v1 import sites, realtime, ontology, timeseries, energy, afdd, ml, optimization, chat, analytics, events, ai_analytics
 
 api_router = APIRouter()
 
@@ -73,4 +73,10 @@ api_router.include_router(
     chat.router,
     prefix="/sites/{site_id}/chat",
     tags=["LLM Chat"],
+)
+
+api_router.include_router(
+    ai_analytics.router,
+    prefix="/sites/{site_id}/ai-analytics",
+    tags=["AI Analytics"],
 )

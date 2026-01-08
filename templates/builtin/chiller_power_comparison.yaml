@@ -1,0 +1,98 @@
+template_id: chiller_power_comparison
+version: "1.0.0"
+created_at: "2024-01-15T00:00:00Z"
+updated_at: "2024-01-15T00:00:00Z"
+created_by: system
+
+matching:
+  trigger_phrases:
+    - "compare chiller power"
+    - "chiller power comparison"
+    - "chiller 1 and chiller 2 power"
+    - "chiller 1 vs chiller 2 power"
+    - "compare power"
+    - "power usage comparison"
+  required_keywords: []
+  excluded_keywords:
+    - "efficiency"
+    - "temperature"
+  confidence_threshold: 0.7
+
+metadata:
+  title: "Chiller Power Comparison"
+  description: "Compare power consumption between multiple chillers over time."
+  category: comparison
+  tags:
+    - chiller
+    - power
+    - comparison
+    - line
+    - trend
+  hvac_context: water
+
+data:
+  source: timescale
+  queries:
+    - query_id: chiller_power
+      device_id: chiller_1
+      datapoints:
+        - power
+  default_time_range:
+    type: relative
+    value: "7d"
+  resampling: "1h"
+  filters: []
+  outlier_filter:
+    enabled: true
+    method: both
+    iqr_multiplier: 1.5
+
+chart:
+  type: line
+  layout:
+    title: "Chiller Power Comparison"
+    xaxis:
+      title: "Time"
+      field: timestamp
+      type: date
+    yaxis:
+      title: "Power (kW)"
+      field: power
+  traces:
+    - name: "Chiller 1"
+      type: line
+      mode: lines
+      x_field: timestamp
+      y_field: power
+      line:
+        width: 2
+        color: "#1f77b4"
+    - name: "Chiller 2"
+      type: line
+      mode: lines
+      x_field: timestamp
+      y_field: power
+      line:
+        width: 2
+        color: "#ff7f0e"
+  shapes: []
+  annotations: []
+
+parameters:
+  - name: date_range
+    type: date_range
+    default: "7d"
+    description: "Time period for comparison"
+    required: false
+  - name: resolution
+    type: enum
+    default: "1h"
+    description: "Data resolution"
+    options:
+      - "15m"
+      - "1h"
+      - "1d"
+    required: false
+
+usage_count: 0
+success_rate: 1.0

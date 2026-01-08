@@ -1,218 +1,415 @@
-"""Machine Learning API endpoints (STUB - Phase 2+).
+"""Machine Learning API endpoints.
 
-These endpoints will provide ML model inference and training capabilities.
-Currently returns mock/placeholder responses.
+Provides endpoints for:
+- Training chiller power models (Gordon-Ng, RLA regression)
+- Making predictions with trained models
+- Model management (list, versions, delete)
 """
 
-from datetime import datetime
-from typing import Dict, List, Optional
+from datetime import date, datetime
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Path, Query, HTTPException
+from pydantic import BaseModel, Field
+
+from app.ml.storage.registry import get_model_registry
+from app.ml.training.trainer import ModelTrainer
 
 router = APIRouter()
 
 
+# ============= Pydantic Schemas =============
+
+
+class TrainingRequest(BaseModel):
+    """Request to train a model."""
+
+    model_type: str = Field(
+        ..., description="Model type: 'gordon_ng' or 'rla_regression'"
+    )
+    equipment_id: str = Field(
+        ..., description="Equipment ID (e.g., 'chiller_1' or 'chiller_1+chiller_2')"
+    )
+    start_date: Optional[date] = Field(None, description="Training data start date")
+    end_date: Optional[date] = Field(None, description="Training data end date")
+    training_params: Optional[Dict[str, Any]] = Field(
+        None, description="Model-specific training parameters"
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "model_type": "gordon_ng",
+                "equipment_id": "chiller_1",
+                "start_date": "2024-01-01",
+                "end_date": "2024-06-30",
+            }
+        }
+
+
+class GordonNgPredictionRequest(BaseModel):
+    """Request for Gordon-Ng model prediction."""
+
+    cooling_load_rt: List[float] = Field(..., description="Cooling load in RT")
+    evap_temp_f: List[float] = Field(
+        ..., description="Evaporator temperature in Fahrenheit"
+    )
+    cond_temp_f: List[float] = Field(
+        ..., description="Condenser temperature in Fahrenheit"
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "cooling_load_rt": [200, 250, 300],
+                "evap_temp_f": [44.0, 44.0, 44.0],
+                "cond_temp_f": [85.0, 85.0, 85.0],
+            }
+        }
+
+
+class RLAPredictionRequest(BaseModel):
+    """Request for RLA regression prediction."""
+
+    percentage_rla: List[float] = Field(..., description="RLA percentage values")
+    temperature_f: Optional[List[float]] = Field(
+        None, description="Optional temperature values"
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "percentage_rla": [50.0, 60.0, 70.0, 80.0],
+            }
+        }
+
+
+class PredictionResponse(BaseModel):
+    """Prediction response."""
+
+    site_id: str
+    equipment_id: str
+    model_type: str
+    model_version: str
+    predictions: List[float]
+    units: str = "kW"
+
+
+# ============= Model Management Endpoints =============
+
+
 @router.get(
     "/models",
-    summary="List available ML models",
-    description="[STUB] Returns list of trained ML models.",
+    summary="List all ML models",
 )
 async def list_models(
-    model_type: Optional[str] = Query(
-        None,
-        description="Filter by model type (anomaly_detection, load_forecasting, etc.)",
-    ),
+    site_id: Optional[str] = Query(None, description="Filter by site"),
+    model_type: Optional[str] = Query(None, description="Filter by model type"),
 ) -> Dict:
-    """List available ML models."""
+    """List all trained ML models with optional filtering."""
+    registry = get_model_registry()
+    models = await registry.list_models(site_id, model_type)
     return {
-        "models": [
-            {
-                "id": "model_001",
-                "name": "load_forecaster_v1",
-                "type": "load_forecasting",
-                "version": "1.0.0",
-                "status": "deployed",
-                "metrics": {"mae": 12.5, "rmse": 18.3},
-                "trained_at": "2024-01-10T12:00:00Z",
-            },
-            {
-                "id": "model_002",
-                "name": "anomaly_detector_v1",
-                "type": "anomaly_detection",
-                "version": "1.0.0",
-                "status": "deployed",
-                "metrics": {"precision": 0.92, "recall": 0.88},
-                "trained_at": "2024-01-08T15:30:00Z",
-            },
-            {
-                "id": "model_003",
-                "name": "efficiency_predictor_v1",
-                "type": "efficiency_prediction",
-                "version": "1.0.0",
-                "status": "trained",
-                "metrics": {"r2": 0.94, "mae": 0.05},
-                "trained_at": "2024-01-12T09:00:00Z",
-            },
-        ],
-        "_stub": True,
-        "_message": "This is a stub endpoint. ML functionality coming in Phase 2.",
+        "models": [m.to_dict() for m in models],
+        "count": len(models),
     }
 
 
 @router.get(
-    "/models/{model_id}",
+    "/models/{site_id}/{model_type}/{equipment_id}",
     summary="Get model details",
-    description="[STUB] Returns details for a specific model.",
 )
 async def get_model(
-    model_id: str = Path(..., description="Model identifier"),
+    site_id: str = Path(..., description="Site identifier"),
+    model_type: str = Path(..., description="Model type"),
+    equipment_id: str = Path(..., description="Equipment identifier"),
+    version: Optional[str] = Query(None, description="Model version (default: latest)"),
 ) -> Dict:
-    """Get ML model details."""
-    return {
-        "id": model_id,
-        "name": f"model_{model_id}",
-        "type": "load_forecasting",
-        "version": "1.0.0",
-        "status": "deployed",
-        "parameters": {
-            "lookback_hours": 168,
-            "forecast_horizon": 24,
-            "features": ["power", "cooling_rate", "outdoor_temp"],
-        },
-        "metrics": {"mae": 12.5, "rmse": 18.3, "mape": 0.08},
-        "trained_at": "2024-01-10T12:00:00Z",
-        "_stub": True,
-    }
+    """Get details for a specific model."""
+    registry = get_model_registry()
+    try:
+        model = await registry.load_model(site_id, model_type, equipment_id, version)
+        return model.metadata.to_dict()
+    except FileNotFoundError:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Model not found: {site_id}/{model_type}/{equipment_id}",
+        )
+
+
+# ============= Site-Specific Training Endpoints =============
 
 
 @router.post(
-    "/training/start",
-    summary="Start model training",
-    description="[STUB] Initiates a model training job.",
+    "/sites/{site_id}/train",
+    summary="Train a model for site equipment",
 )
-async def start_training(
-    model_type: str = Query(..., description="Type of model to train"),
-    site_id: Optional[str] = Query(None, description="Site-specific model"),
+async def train_model(
+    site_id: str = Path(..., description="Site identifier"),
+    request: TrainingRequest = ...,
 ) -> Dict:
-    """Start a model training job."""
-    job_id = f"train_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
+    """Train a model for specific equipment at a site.
 
+    For Gordon-Ng models, trains on cooling load, temperatures, and power data.
+    For RLA regression, trains on RLA percentage to power mapping.
+    """
+    registry = get_model_registry()
+    trainer = ModelTrainer(registry)
+
+    try:
+        start_dt = (
+            datetime.combine(request.start_date, datetime.min.time())
+            if request.start_date
+            else None
+        )
+        end_dt = (
+            datetime.combine(request.end_date, datetime.max.time())
+            if request.end_date
+            else None
+        )
+
+        metadata = await trainer.train_model(
+            site_id=site_id,
+            model_type=request.model_type,
+            equipment_id=request.equipment_id,
+            start_date=start_dt,
+            end_date=end_dt,
+            training_params=request.training_params,
+        )
+
+        return {
+            "status": "completed",
+            "model": metadata.to_dict(),
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Training failed: {str(e)}")
+
+
+@router.post(
+    "/sites/{site_id}/train/all-chillers",
+    summary="Train models for all chillers at a site",
+)
+async def train_all_chillers(
+    site_id: str = Path(..., description="Site identifier"),
+    model_type: str = Query(..., description="Model type to train"),
+    start_date: Optional[date] = Query(None, description="Training data start"),
+    end_date: Optional[date] = Query(None, description="Training data end"),
+) -> Dict:
+    """Train models for all chillers discovered at the site."""
+    registry = get_model_registry()
+    trainer = ModelTrainer(registry)
+
+    try:
+        start_dt = (
+            datetime.combine(start_date, datetime.min.time()) if start_date else None
+        )
+        end_dt = datetime.combine(end_date, datetime.max.time()) if end_date else None
+
+        results = await trainer.train_all_chillers(
+            site_id=site_id,
+            model_type=model_type,
+            start_date=start_dt,
+            end_date=end_dt,
+        )
+
+        return {
+            "status": "completed",
+            "models_trained": len(results),
+            "models": [m.to_dict() for m in results],
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Training failed: {str(e)}")
+
+
+@router.post(
+    "/sites/{site_id}/train/all-combinations",
+    summary="Train models for all chiller combinations",
+)
+async def train_all_combinations(
+    site_id: str = Path(..., description="Site identifier"),
+    model_type: str = Query(..., description="Model type to train"),
+    start_date: Optional[date] = Query(None, description="Training data start"),
+    end_date: Optional[date] = Query(None, description="Training data end"),
+) -> Dict:
+    """Train models for all chiller combinations at the site."""
+    registry = get_model_registry()
+    trainer = ModelTrainer(registry)
+
+    try:
+        start_dt = (
+            datetime.combine(start_date, datetime.min.time()) if start_date else None
+        )
+        end_dt = datetime.combine(end_date, datetime.max.time()) if end_date else None
+
+        results = await trainer.train_all_combinations(
+            site_id=site_id,
+            model_type=model_type,
+            start_date=start_dt,
+            end_date=end_dt,
+        )
+
+        return {
+            "status": "completed",
+            "models_trained": len(results),
+            "models": [m.to_dict() for m in results],
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Training failed: {str(e)}")
+
+
+# ============= Site-Specific Prediction Endpoints =============
+
+
+@router.post(
+    "/sites/{site_id}/predict/gordon-ng/{equipment_id}",
+    summary="Predict chiller power using Gordon-Ng model",
+    response_model=PredictionResponse,
+)
+async def predict_gordon_ng(
+    site_id: str = Path(..., description="Site identifier"),
+    equipment_id: str = Path(..., description="Equipment identifier"),
+    request: GordonNgPredictionRequest = ...,
+    version: Optional[str] = Query(None, description="Model version (default: latest)"),
+) -> PredictionResponse:
+    """Predict chiller power consumption using Gordon-Ng thermodynamic model.
+
+    Requires cooling load (RT), evaporator temperature, and condenser temperature.
+    """
+    registry = get_model_registry()
+
+    try:
+        model = await registry.load_model(site_id, "gordon_ng", equipment_id, version)
+
+        import numpy as np
+
+        predictions = model.predict(
+            np.array(request.cooling_load_rt),
+            np.array(request.evap_temp_f),
+            np.array(request.cond_temp_f),
+        )
+
+        return PredictionResponse(
+            site_id=site_id,
+            equipment_id=equipment_id,
+            model_type="gordon_ng",
+            model_version=model.metadata.version,
+            predictions=predictions.tolist(),
+            units="kW",
+        )
+    except FileNotFoundError:
+        raise HTTPException(
+            status_code=404, detail=f"No Gordon-Ng model found for {equipment_id}"
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post(
+    "/sites/{site_id}/predict/rla/{equipment_id}",
+    summary="Predict chiller power using RLA regression",
+    response_model=PredictionResponse,
+)
+async def predict_rla(
+    site_id: str = Path(..., description="Site identifier"),
+    equipment_id: str = Path(..., description="Equipment identifier"),
+    request: RLAPredictionRequest = ...,
+    version: Optional[str] = Query(None, description="Model version (default: latest)"),
+) -> PredictionResponse:
+    """Predict chiller power consumption from RLA percentage.
+
+    Simple regression model mapping RLA% to power (kW).
+    """
+    registry = get_model_registry()
+
+    try:
+        model = await registry.load_model(
+            site_id, "rla_regression", equipment_id, version
+        )
+
+        import numpy as np
+
+        predictions = model.predict(
+            np.array(request.percentage_rla),
+            np.array(request.temperature_f) if request.temperature_f else None,
+        )
+
+        return PredictionResponse(
+            site_id=site_id,
+            equipment_id=equipment_id,
+            model_type="rla_regression",
+            model_version=model.metadata.version,
+            predictions=predictions.tolist(),
+            units="kW",
+        )
+    except FileNotFoundError:
+        raise HTTPException(
+            status_code=404, detail=f"No RLA model found for {equipment_id}"
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get(
+    "/sites/{site_id}/models",
+    summary="List models for a site",
+)
+async def list_site_models(
+    site_id: str = Path(..., description="Site identifier"),
+    model_type: Optional[str] = Query(None, description="Filter by model type"),
+) -> Dict:
+    """List all trained models for a specific site."""
+    registry = get_model_registry()
+    models = await registry.list_models(site_id, model_type)
     return {
-        "job_id": job_id,
-        "status": "queued",
-        "model_type": model_type,
         "site_id": site_id,
-        "started_at": datetime.utcnow().isoformat(),
-        "estimated_duration_minutes": 30,
-        "_stub": True,
-        "_message": "Training job would be queued. This is a stub endpoint.",
+        "models": [m.to_dict() for m in models],
+        "count": len(models),
     }
 
 
 @router.get(
-    "/training/{job_id}/status",
-    summary="Get training job status",
-    description="[STUB] Returns status of a training job.",
+    "/sites/{site_id}/models/{equipment_id}/versions",
+    summary="Get model versions",
 )
-async def get_training_status(
-    job_id: str = Path(..., description="Training job identifier"),
+async def get_model_versions(
+    site_id: str = Path(..., description="Site identifier"),
+    equipment_id: str = Path(..., description="Equipment identifier"),
+    model_type: str = Query(..., description="Model type"),
 ) -> Dict:
-    """Get training job status."""
+    """Get all versions of a model."""
+    registry = get_model_registry()
+    versions = await registry.get_model_versions(site_id, model_type, equipment_id)
     return {
-        "job_id": job_id,
-        "status": "running",
-        "progress": 0.45,
-        "current_epoch": 23,
-        "total_epochs": 50,
-        "metrics": {
-            "train_loss": 0.023,
-            "val_loss": 0.031,
-        },
-        "started_at": "2024-01-15T10:00:00Z",
-        "estimated_completion": "2024-01-15T10:30:00Z",
-        "_stub": True,
+        "site_id": site_id,
+        "equipment_id": equipment_id,
+        "model_type": model_type,
+        "versions": versions,
     }
 
 
-# Site-specific prediction endpoints
-@router.post(
-    "/sites/{site_id}/predict/load",
-    summary="Predict cooling load",
-    description="[STUB] Forecast future cooling load.",
+@router.delete(
+    "/sites/{site_id}/models/{model_type}/{equipment_id}/{version}",
+    summary="Delete a model version",
 )
-async def predict_load(
+async def delete_model_version(
     site_id: str = Path(..., description="Site identifier"),
-    horizon_hours: int = Query(24, description="Forecast horizon in hours"),
+    model_type: str = Path(..., description="Model type"),
+    equipment_id: str = Path(..., description="Equipment identifier"),
+    version: str = Path(..., description="Version to delete"),
 ) -> Dict:
-    """Predict cooling load for the next N hours."""
-    # Generate mock predictions
-    predictions = [
-        {
-            "timestamp": f"2024-01-15T{10+i:02d}:00:00Z",
-            "predicted_load_rt": 250 + (i * 5) - (i**2 * 0.5),
-            "confidence_lower": 230 + (i * 5) - (i**2 * 0.5),
-            "confidence_upper": 270 + (i * 5) - (i**2 * 0.5),
-        }
-        for i in range(min(horizon_hours, 24))
-    ]
+    """Delete a specific model version."""
+    registry = get_model_registry()
+    deleted = await registry.delete_model(site_id, model_type, equipment_id, version)
+
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Model version not found")
 
     return {
+        "status": "deleted",
         "site_id": site_id,
-        "model": "load_forecaster_v1",
-        "horizon_hours": horizon_hours,
-        "predictions": predictions,
-        "generated_at": datetime.utcnow().isoformat(),
-        "_stub": True,
-    }
-
-
-@router.post(
-    "/sites/{site_id}/predict/anomaly",
-    summary="Detect anomalies",
-    description="[STUB] Detect anomalies in recent data.",
-)
-async def detect_anomalies(
-    site_id: str = Path(..., description="Site identifier"),
-) -> Dict:
-    """Detect anomalies in recent sensor data."""
-    return {
-        "site_id": site_id,
-        "model": "anomaly_detector_v1",
-        "anomalies": [
-            {
-                "device_id": "chiller_2",
-                "datapoint": "power",
-                "timestamp": "2024-01-15T09:45:00Z",
-                "actual_value": 142.5,
-                "expected_range": [85.0, 120.0],
-                "anomaly_score": 0.87,
-                "severity": "warning",
-            }
-        ],
-        "total_anomalies": 1,
-        "scan_period": "last_1h",
-        "_stub": True,
-    }
-
-
-@router.post(
-    "/sites/{site_id}/predict/efficiency",
-    summary="Predict plant efficiency",
-    description="[STUB] Predict optimal plant efficiency.",
-)
-async def predict_efficiency(
-    site_id: str = Path(..., description="Site identifier"),
-) -> Dict:
-    """Predict plant efficiency under current conditions."""
-    return {
-        "site_id": site_id,
-        "model": "efficiency_predictor_v1",
-        "current_efficiency": 0.746,
-        "predicted_optimal": 0.68,
-        "potential_savings_pct": 8.8,
-        "recommendations": [
-            "Consider staging down chiller_2 at current load",
-            "Cooling tower approach is 2°F above optimal",
-        ],
-        "_stub": True,
+        "model_type": model_type,
+        "equipment_id": equipment_id,
+        "version": version,
     }

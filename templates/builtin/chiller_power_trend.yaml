@@ -1,0 +1,94 @@
+template_id: chiller_power_trend
+version: "1.0.0"
+created_at: "2024-01-15T00:00:00Z"
+updated_at: "2024-01-15T00:00:00Z"
+created_by: system
+
+matching:
+  trigger_phrases:
+    - "chiller power"
+    - "chiller power trend"
+    - "chiller consumption"
+    - "chiller energy over time"
+    - "power consumption trend"
+  required_keywords: []
+  excluded_keywords:
+    - "comparison"
+    - "vs"
+  confidence_threshold: 0.7
+
+metadata:
+  title: "Chiller Power Consumption Trend"
+  description: "Line chart showing chiller power consumption over time. Track power usage patterns and identify anomalies."
+  category: energy
+  tags:
+    - chiller
+    - power
+    - trend
+    - energy
+    - line
+  hvac_context: water
+
+data:
+  source: timescale
+  queries:
+    - query_id: chiller_power
+      device_id: "{chiller_id}"
+      datapoints:
+        - power
+  default_time_range:
+    type: relative
+    value: "7d"
+  resampling: "15m"
+  filters: []
+  outlier_filter:
+    enabled: true
+    method: both
+    iqr_multiplier: 1.5
+
+chart:
+  type: line
+  layout:
+    title: "Chiller Power Consumption"
+    xaxis:
+      title: "Time"
+      field: timestamp
+      type: date
+    yaxis:
+      title: "Power (kW)"
+      field: power
+  traces:
+    - name: "Power"
+      type: line
+      mode: lines
+      x_field: timestamp
+      y_field: power
+      line:
+        width: 2
+        color: "#1f77b4"
+  shapes: []
+  annotations: []
+
+parameters:
+  - name: chiller_id
+    type: device
+    default: "chiller_1"
+    description: "Chiller to display"
+    required: true
+  - name: date_range
+    type: date_range
+    default: "7d"
+    description: "Time period"
+    required: false
+  - name: resolution
+    type: enum
+    default: "15m"
+    description: "Data resolution"
+    options:
+      - "1m"
+      - "15m"
+      - "1h"
+    required: false
+
+usage_count: 0
+success_rate: 1.0
