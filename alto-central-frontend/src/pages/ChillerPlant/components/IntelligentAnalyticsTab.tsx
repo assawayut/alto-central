@@ -140,17 +140,27 @@ const IntelligentAnalyticsTab: React.FC<IntelligentAnalyticsTabProps> = ({ siteI
         throw new Error('No response body');
       }
 
+      // Buffer for handling chunks that split across reads
+      let buffer = '';
+
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        const text = decoder.decode(value);
-        const lines = text.split('\n');
+        // Append new data to buffer
+        buffer += decoder.decode(value, { stream: true });
+
+        // Process complete lines (SSE events end with \n\n or \n)
+        const lines = buffer.split('\n');
+        // Keep the last potentially incomplete line in buffer
+        buffer = lines.pop() || '';
 
         for (const line of lines) {
-          if (line.startsWith('data: ')) {
+          const trimmedLine = line.trim();
+          if (trimmedLine.startsWith('data: ')) {
             try {
-              const data = JSON.parse(line.slice(6));
+              const jsonStr = trimmedLine.slice(6);
+              const data = JSON.parse(jsonStr);
 
               if (data.event === 'progress') {
                 // Update message with progress
@@ -162,6 +172,7 @@ const IntelligentAnalyticsTab: React.FC<IntelligentAnalyticsTabProps> = ({ siteI
               } else if (data.event === 'complete') {
                 // Final result
                 const result: ChartGenerationResponse = data.result;
+                console.log('SSE complete - plotly_spec:', result.plotly_spec);
                 setMessages(prev => prev.map(msg =>
                   msg.id === assistantMessageId
                     ? {
@@ -189,9 +200,22 @@ const IntelligentAnalyticsTab: React.FC<IntelligentAnalyticsTabProps> = ({ siteI
                 ));
               }
             } catch (e) {
-              // Ignore JSON parse errors for incomplete chunks
+              console.warn('SSE JSON parse error:', e, 'Line:', trimmedLine.slice(0, 100));
             }
           }
+        }
+      }
+
+      // Process any remaining data in buffer
+      if (buffer.trim().startsWith('data: ')) {
+        try {
+          const data = JSON.parse(buffer.trim().slice(6));
+          if (data.event === 'complete' && data.result?.plotly_spec) {
+            console.log('SSE buffer complete - plotly_spec:', data.result.plotly_spec);
+            setCurrentChart(data.result);
+          }
+        } catch (e) {
+          console.warn('SSE buffer parse error:', e);
         }
       }
     } catch (err) {
@@ -455,11 +479,45 @@ const IntelligentAnalyticsTab: React.FC<IntelligentAnalyticsTabProps> = ({ siteI
             <div className="flex-1 min-h-0 p-2">
               <Plot
                 data={currentChart.plotly_spec!.data as Data[]}
-                layout={{
-                  ...currentChart.plotly_spec!.layout,
-                  autosize: true,
-                  margin: { l: 60, r: 40, t: 50, b: 50 },
-                } as Partial<Layout>}
+                layout={(() => {
+                  const backendLayout = currentChart.plotly_spec!.layout as Record<string, any>;
+                  const traces = currentChart.plotly_spec!.data as Record<string, any>[];
+
+                  // Check if any trace uses secondary y-axis
+                  const hasYaxis2 = traces.some(trace => trace.yaxis === 'y2');
+
+                  // Build layout with proper yaxis2 support
+                  const layout: Record<string, any> = {
+                    ...backendLayout,
+                    autosize: true,
+                    margin: {
+                      l: backendLayout?.margin?.l || 60,
+                      r: hasYaxis2 ? Math.max(backendLayout?.margin?.r || 80, 100) : (backendLayout?.margin?.r || 60),
+                      t: backendLayout?.margin?.t || 50,
+                      b: backendLayout?.margin?.b || 60,
+                    },
+                  };
+
+                  // Always create yaxis2 when traces reference it
+                  if (hasYaxis2) {
+                    // Find the trace that uses y2 for its name (for axis title)
+                    const y2Trace = traces.find(trace => trace.yaxis === 'y2');
+                    layout.yaxis2 = {
+                      title: backendLayout?.yaxis2?.title || y2Trace?.name || 'Secondary Axis',
+                      side: 'right',
+                      overlaying: 'y',
+                      showgrid: false,
+                      ...backendLayout?.yaxis2,
+                      // Force these properties to ensure axis shows
+                      anchor: 'x',
+                    };
+                  }
+
+                  // Debug: log layout to console
+                  console.log('Plotly layout:', layout);
+
+                  return layout as Partial<Layout>;
+                })()}
                 config={{
                   responsive: true,
                   displayModeBar: true,
