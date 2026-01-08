@@ -17,8 +17,8 @@ logger = logging.getLogger(__name__)
 class AnthropicClient:
     """Wrapper for Anthropic Claude API with tool calling support."""
 
-    # Default model for analytics - Haiku is faster and cheaper
-    DEFAULT_MODEL = "claude-3-haiku-20240307"
+    # Default model for analytics - Sonnet for better reasoning on complex queries
+    DEFAULT_MODEL = "claude-sonnet-4-20250514"
 
     def __init__(self):
         self._client: Optional[anthropic.Anthropic] = None
@@ -60,7 +60,7 @@ class AnthropicClient:
         system: Optional[str] = None,
         tools: Optional[List[Dict[str, Any]]] = None,
         model: Optional[str] = None,
-        max_tokens: int = 4096,
+        max_tokens: int = 16384,
         temperature: float = 0.0,
     ) -> anthropic.types.Message:
         """Send a chat message with optional tools.

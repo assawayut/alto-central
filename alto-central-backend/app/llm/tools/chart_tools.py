@@ -135,14 +135,22 @@ CREATE_SCATTER_CHART_TOOL = {
     "name": "create_scatter_chart",
     "description": """Create a scatter plot for correlation analysis.
 Best for showing relationships between two variables.
-Returns a complete Plotly JSON specification.""",
+Returns a complete Plotly JSON specification.
+
+For coloring by a continuous value (e.g., wetbulb temperature):
+- Set color_field to the field name (e.g., "wetbulb_temperature")
+- Points will be colored using a gradient (Viridis colorscale)
+- A colorbar will show the scale
+
+For multiple labeled traces (e.g., by chiller count), DON'T use this tool.
+Instead, query data, group it, and build plotly_spec manually with multiple traces.""",
     "input_schema": {
         "type": "object",
         "properties": {
             "data": {
                 "type": "array",
                 "items": {"type": "object"},
-                "description": "Array of data records",
+                "description": "Array of data records. For color_field, include that field in each record.",
             },
             "x_field": {"type": "string", "description": "Field name for x-axis"},
             "y_field": {"type": "string", "description": "Field name for y-axis"},
@@ -151,7 +159,11 @@ Returns a complete Plotly JSON specification.""",
             "y_label": {"type": "string", "description": "Y-axis label"},
             "color_field": {
                 "type": "string",
-                "description": "Optional field for color scale",
+                "description": "Field for color gradient (e.g., 'wetbulb_temperature'). Creates continuous colorscale.",
+            },
+            "color_label": {
+                "type": "string",
+                "description": "Label for colorbar (e.g., 'Wetbulb (°F)')",
             },
             "trendline": {
                 "type": "boolean",
@@ -188,6 +200,50 @@ Returns a complete Plotly JSON specification.""",
             "color": {"type": "string", "description": "Bar color (hex or name)"},
         },
         "required": ["data", "x_field", "y_field", "title", "x_label", "y_label"],
+    },
+}
+
+CREATE_MULTI_TRACE_SCATTER_TOOL = {
+    "name": "create_multi_trace_scatter",
+    "description": """Create a scatter plot with MULTIPLE labeled traces (groups).
+Use this for labeling by categories like:
+- Number of chillers running (1 Chiller, 2 Chillers, 3 Chillers)
+- Which specific chiller is running (CH-1 only, CH-1+CH-2, etc.)
+- Any categorical grouping of data points
+
+Each trace will have a different color and appear in the legend.
+Do NOT use this for continuous color scales (use create_scatter_chart with color_field instead).
+
+Example traces input:
+[
+  {"name": "1 Chiller", "x": [100, 150], "y": [0.8, 0.85], "color": "#1f77b4"},
+  {"name": "2 Chillers", "x": [200, 250], "y": [0.7, 0.75], "color": "#ff7f0e"},
+  {"name": "3 Chillers", "x": [300, 350], "y": [0.65, 0.68], "color": "#2ca02c"}
+]""",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "traces": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string", "description": "Label for this group (appears in legend)"},
+                        "x": {"type": "array", "items": {"type": "number"}, "description": "X values"},
+                        "y": {"type": "array", "items": {"type": "number"}, "description": "Y values"},
+                        "color": {"type": "string", "description": "Optional hex color (e.g., '#1f77b4')"},
+                    },
+                    "required": ["name", "x", "y"],
+                },
+                "description": "Array of trace objects, each representing a labeled group",
+            },
+            "title": {"type": "string", "description": "Chart title"},
+            "x_label": {"type": "string", "description": "X-axis label"},
+            "y_label": {"type": "string", "description": "Y-axis label"},
+            "marker_size": {"type": "number", "description": "Marker size (default: 6)"},
+            "marker_opacity": {"type": "number", "description": "Marker opacity 0-1 (default: 0.7)"},
+        },
+        "required": ["traces", "title", "x_label", "y_label"],
     },
 }
 
@@ -264,6 +320,7 @@ def execute_create_scatter_chart(
     x_label: str,
     y_label: str,
     color_field: Optional[str] = None,
+    color_label: Optional[str] = None,
     trendline: bool = False,
     **kwargs,
 ) -> Dict[str, Any]:
@@ -277,6 +334,7 @@ def execute_create_scatter_chart(
             x_label=x_label,
             y_label=y_label,
             color_field=color_field,
+            color_label=color_label,
             trendline=trendline,
         )
         return {
@@ -319,6 +377,72 @@ def execute_create_bar_chart(
         }
     except Exception as e:
         logger.error(f"create_bar_chart failed: {e}")
+        return {"success": False, "error": str(e)}
+
+
+def execute_create_multi_trace_scatter(
+    traces: List[Dict[str, Any]],
+    title: str,
+    x_label: str,
+    y_label: str,
+    marker_size: int = 6,
+    marker_opacity: float = 0.7,
+    **kwargs,
+) -> Dict[str, Any]:
+    """Execute multi-trace scatter chart creation.
+
+    Each trace represents a labeled group with its own color.
+    """
+    default_colors = [
+        "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
+        "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf"
+    ]
+
+    try:
+        plotly_traces = []
+        for i, trace in enumerate(traces):
+            color = trace.get("color") or default_colors[i % len(default_colors)]
+            plotly_traces.append({
+                "type": "scatter",
+                "mode": "markers",
+                "name": trace["name"],
+                "x": trace["x"],
+                "y": trace["y"],
+                "marker": {
+                    "size": marker_size,
+                    "opacity": marker_opacity,
+                    "color": color,
+                },
+            })
+
+        spec = {
+            "data": plotly_traces,
+            "layout": {
+                "title": {"text": title, "x": 0.5},
+                "xaxis": {
+                    "title": x_label,
+                    "gridcolor": "rgba(128,128,128,0.2)",
+                    "showgrid": True,
+                },
+                "yaxis": {
+                    "title": y_label,
+                    "gridcolor": "rgba(128,128,128,0.2)",
+                    "showgrid": True,
+                },
+                "hovermode": "closest",
+                "legend": {"orientation": "h", "y": -0.15, "x": 0.5, "xanchor": "center"},
+                "paper_bgcolor": "rgba(0,0,0,0)",
+                "plot_bgcolor": "rgba(0,0,0,0)",
+            },
+        }
+
+        return {
+            "success": True,
+            "chart_type": "multi_trace_scatter",
+            "plotly_spec": spec,
+        }
+    except Exception as e:
+        logger.error(f"create_multi_trace_scatter failed: {e}")
         return {"success": False, "error": str(e)}
 
 
@@ -901,6 +1025,7 @@ TOOL_EXECUTORS = {
     "create_line_chart": execute_create_line_chart,
     "create_scatter_chart": execute_create_scatter_chart,
     "create_bar_chart": execute_create_bar_chart,
+    "create_multi_trace_scatter": execute_create_multi_trace_scatter,
     "create_multi_axis_chart": execute_create_multi_axis_chart,
 }
 
@@ -914,6 +1039,7 @@ CHART_TOOLS = [
     QUERY_AND_CHART_TOOL,  # Put this first so AI sees it first
     CREATE_LINE_CHART_TOOL,
     CREATE_SCATTER_CHART_TOOL,
+    CREATE_MULTI_TRACE_SCATTER_TOOL,  # For categorical labeling (chiller count, etc.)
     CREATE_BAR_CHART_TOOL,
     CREATE_MULTI_AXIS_CHART_TOOL,
 ]

@@ -85,6 +85,96 @@ The building has these main components you can query:
    - Equipment comparison
    - Time-of-day profiles
 
+## Advanced: Labeling and Coloring Points
+
+Users often want to label or color scatter plot points by different criteria. Handle these by querying additional data and creating MULTIPLE TRACES.
+
+### Example 1: "Label by number of chillers running"
+Query plant data + all chiller status_read, then create separate traces:
+```
+1. Query plant: efficiency, cooling_rate
+2. Query chiller_1, chiller_2, chiller_3: status_read (same time range)
+3. For each data point, count how many chillers have status_read >= 1
+4. Create separate scatter traces:
+   - Trace "1 Chiller": points where count=1 (color: blue)
+   - Trace "2 Chillers": points where count=2 (color: orange)
+   - Trace "3 Chillers": points where count=3 (color: green)
+```
+
+### Example 2: "Color by wetbulb temperature"
+Query main data + weather data, use color scale:
+```
+1. Query plant: efficiency, cooling_rate
+2. Query outdoor_weather_station: wetbulb_temperature (same time range)
+3. Merge data by timestamp
+4. Create scatter trace with marker.color = wetbulb values, marker.colorscale = "Viridis"
+```
+
+### Example 3: "Label by which chiller is running"
+Similar to chiller count, but identify specific combinations:
+```
+- "CH-1 only": chiller_1 on, others off
+- "CH-2 only": chiller_2 on, others off
+- "CH-1+CH-2": both on, chiller_3 off
+- etc.
+```
+
+### Example 4: "Compare today vs yesterday" (period comparison)
+Use compare_periods parameter:
+```
+query_and_chart(
+  device_ids=["chiller_1"],
+  metrics=["efficiency"],
+  chart_type="line",
+  compare_periods=["today", "yesterday"],  # X-axis becomes hour of day
+  title="Chiller 1 Efficiency: Today vs Yesterday"
+)
+```
+
+### Example 5: "Filter by equipment status"
+Use filters parameter to include/exclude data:
+```
+query_and_chart(
+  device_ids=["plant"],
+  metrics=["efficiency", "cooling_rate"],
+  chart_type="scatter",
+  filters={
+    "only_running": ["chiller_2"],           # chiller_2 must be ON
+    "not_running": ["chiller_1", "chiller_3"] # others must be OFF
+  },
+  title="Plant Efficiency (Only Chiller 2 Running)"
+)
+```
+
+### Key Principle
+For complex labeling:
+1. Query main data: query_timeseries for plant (power, cooling_rate)
+2. Query labeling data: Use `batch_query_timeseries` to get status from ALL chillers in ONE call!
+3. Join data by timestamp
+4. Group data by the labeling criteria
+5. Use create_multi_trace_scatter to create the chart
+
+**IMPORTANT**: Use `batch_query_timeseries` instead of multiple `query_timeseries` calls!
+This is MUCH faster - it queries all devices in parallel in one tool call.
+
+Example workflow for "plant efficiency labeled by number of chillers running":
+```
+1. query_timeseries: plant (power, cooling_rate) -> efficiency data
+2. batch_query_timeseries: ["chiller_1", "chiller_2", "chiller_3", "chiller_4"] (status_read) -> all status in ONE call
+3. Join data by timestamp, count running chillers (status_read >= 1)
+4. Group: {1: [points], 2: [points], 3: [points]}
+5. create_multi_trace_scatter(
+     traces=[
+       {"name": "1 Chiller", "x": [cooling loads], "y": [efficiencies]},
+       {"name": "2 Chillers", "x": [cooling loads], "y": [efficiencies]},
+       {"name": "3 Chillers", "x": [cooling loads], "y": [efficiencies]}
+     ],
+     title="Plant Efficiency by Chiller Count",
+     x_label="Cooling Load (RT)",
+     y_label="Efficiency (kW/RT)"
+   )
+```
+
 ## Workflow
 1. First, query the relevant data using data tools
 2. Then, create a chart using the appropriate chart tool

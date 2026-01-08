@@ -114,6 +114,7 @@ class PlotlyBuilder:
         x_label: str,
         y_label: str,
         color_field: Optional[str] = None,
+        color_label: Optional[str] = None,
         size_field: Optional[str] = None,
         marker_size: int = 6,
         marker_opacity: float = 0.7,
@@ -130,6 +131,7 @@ class PlotlyBuilder:
             x_label: X-axis label
             y_label: Y-axis label
             color_field: Optional field for color scale
+            color_label: Label for colorbar (defaults to color_field name)
             size_field: Optional field for marker size
             marker_size: Default marker size
             marker_opacity: Marker opacity
@@ -151,7 +153,7 @@ class PlotlyBuilder:
             color_values = [d.get(color_field) for d in data]
             marker["color"] = color_values
             marker["colorscale"] = colorscale
-            marker["colorbar"] = {"title": color_field}
+            marker["colorbar"] = {"title": color_label or color_field.replace("_", " ").title()}
         else:
             marker["color"] = cls.COLOR_PALETTE[0]
 

@@ -261,6 +261,54 @@ Returns aggregated data grouped by the specified time bucket.""",
     },
 }
 
+BATCH_QUERY_TIMESERIES_TOOL = {
+    "name": "batch_query_timeseries",
+    "description": """Query the SAME datapoints from MULTIPLE devices in ONE call.
+Use this instead of multiple query_timeseries calls when fetching the same metric from many devices.
+
+MUCH faster than calling query_timeseries multiple times!
+
+Example: Get status_read from all chillers in one call:
+  batch_query_timeseries(
+    device_ids=["chiller_1", "chiller_2", "chiller_3", "chiller_4"],
+    datapoints=["status_read"],
+    start_time="7d",
+    end_time="now"
+  )
+
+Returns data with device_id field so you can identify which device each row belongs to.""",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "device_ids": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "List of device IDs to query (e.g., ['chiller_1', 'chiller_2', 'chiller_3'])",
+            },
+            "datapoints": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Datapoints to fetch from ALL devices (e.g., ['status_read'])",
+            },
+            "start_time": {
+                "type": "string",
+                "description": "Start time - either ISO 8601 or relative like '7d', '24h'",
+            },
+            "end_time": {
+                "type": "string",
+                "description": "End time - ISO 8601 or 'now'",
+            },
+            "resample": {
+                "type": "string",
+                "enum": ["1m", "5m", "15m", "1h", "1d"],
+                "description": "Resampling interval",
+                "default": "15m",
+            },
+        },
+        "required": ["device_ids", "datapoints", "start_time", "end_time"],
+    },
+}
+
 LIST_AVAILABLE_DATAPOINTS_TOOL = {
     "name": "list_available_datapoints",
     "description": """List available device types and their datapoints.
@@ -603,6 +651,69 @@ async def execute_aggregate_data(
         return {"error": str(e)}
 
 
+async def execute_batch_query_timeseries(
+    site_id: str,
+    device_ids: List[str],
+    datapoints: List[str],
+    start_time: str,
+    end_time: str,
+    resample: str = "15m",
+) -> Dict[str, Any]:
+    """Query multiple devices in parallel and return combined data.
+
+    Returns:
+        Dict with device_id tagged in each record for easy grouping.
+    """
+    import asyncio
+
+    logger.info(f"[BATCH_QUERY] Querying {len(device_ids)} devices: {device_ids}")
+    logger.info(f"[BATCH_QUERY] Datapoints: {datapoints}, Time: {start_time} to {end_time}")
+
+    # Query all devices in parallel
+    async def query_device(device_id: str) -> Dict[str, Any]:
+        result = await execute_query_timeseries(
+            site_id=site_id,
+            device_id=device_id,
+            datapoints=datapoints,
+            start_time=start_time,
+            end_time=end_time,
+            resample=resample,
+            filter_outliers=False,  # Don't filter for status queries
+        )
+        # Tag each record with device_id
+        if "data" in result:
+            for record in result["data"]:
+                record["device_id"] = device_id
+        return result
+
+    results = await asyncio.gather(*[query_device(d) for d in device_ids])
+
+    # Combine all data
+    all_data = []
+    total_rows = 0
+    errors = []
+
+    for device_id, result in zip(device_ids, results):
+        if "error" in result:
+            errors.append(f"{device_id}: {result['error']}")
+        else:
+            data = result.get("data", [])
+            all_data.extend(data)
+            total_rows += len(data)
+
+    logger.info(f"[BATCH_QUERY] Total rows: {total_rows}, Errors: {len(errors)}")
+
+    return {
+        "device_ids": device_ids,
+        "datapoints": datapoints,
+        "start_time": start_time,
+        "end_time": end_time,
+        "total_rows": total_rows,
+        "data": all_data,
+        "errors": errors if errors else None,
+    }
+
+
 async def execute_list_available_datapoints(
     site_id: str,
     device_type: Optional[str] = None,
@@ -756,6 +867,7 @@ async def execute_list_available_datapoints(
 # Map tool names to executors
 TOOL_EXECUTORS = {
     "query_timeseries": execute_query_timeseries,
+    "batch_query_timeseries": execute_batch_query_timeseries,
     "query_realtime": execute_query_realtime,
     "aggregate_data": execute_aggregate_data,
     "list_available_datapoints": execute_list_available_datapoints,
@@ -764,6 +876,7 @@ TOOL_EXECUTORS = {
 # All data tool definitions
 DATA_TOOLS = [
     QUERY_TIMESERIES_TOOL,
+    BATCH_QUERY_TIMESERIES_TOOL,  # For querying multiple devices at once
     QUERY_REALTIME_TOOL,
     AGGREGATE_DATA_TOOL,
     LIST_AVAILABLE_DATAPOINTS_TOOL,

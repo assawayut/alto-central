@@ -453,7 +453,19 @@ Content-Type: application/json
 
 **AI Tool Features:**
 
-The AI uses a `query_and_chart` tool with these capabilities:
+The AI (Claude Sonnet) uses these tools:
+
+| Tool | Description |
+|------|-------------|
+| `query_and_chart` | Combined query + chart for simple requests |
+| `query_timeseries` | Query single device historical data |
+| `batch_query_timeseries` | Query multiple devices in parallel (faster) |
+| `create_scatter_chart` | Scatter with optional color gradient |
+| `create_multi_trace_scatter` | Scatter with labeled groups (for chiller count, etc.) |
+| `create_line_chart` | Time series trends |
+| `create_bar_chart` | Categorical comparisons |
+
+**Filtering options** (via `query_and_chart`):
 
 | Feature | Example | Description |
 |---------|---------|-------------|
@@ -463,6 +475,14 @@ The AI uses a `query_and_chart` tool with these capabilities:
 | Chiller count | `filters: {num_chillers_running: 2}` | Filter by number of chillers running |
 | Load filter | `filters: {min_cooling_load: 100}` | Minimum cooling load threshold |
 | Time filter | `filters: {time_of_day: {start: 8, end: 18}}` | Filter by working hours |
+
+**Complex labeling** (AI handles automatically):
+
+| Labeling Type | Tool Used | Example |
+|---------------|-----------|---------|
+| By continuous value | `create_scatter_chart` with `color_field` | Color by wetbulb temperature |
+| By category | `create_multi_trace_scatter` | Label by chiller count (1, 2, 3 chillers) |
+| By combination | `create_multi_trace_scatter` | Label by which chillers are running |
 
 **Device ID patterns:**
 - `plant` - Aggregate plant data
