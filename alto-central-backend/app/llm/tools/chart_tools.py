@@ -95,6 +95,82 @@ Examples:
 }
 
 
+# Server-side labeled scatter tool - handles all grouping internally
+LABELED_SCATTER_CHART_TOOL = {
+    "name": "labeled_scatter_chart",
+    "description": """Create a scatter chart with data LABELED/GROUPED by equipment status.
+This tool handles ALL data fetching and grouping SERVER-SIDE - much faster than manual queries!
+
+Use this for requests like:
+- "plant efficiency vs load labeled by number of chillers running"
+- "plant efficiency labeled by which chillers are running"
+- "efficiency vs load grouped by chiller combination"
+
+The tool will:
+1. Query plant data (efficiency, cooling_rate)
+2. Query chiller status for all specified chillers
+3. Group data by the labeling criteria
+4. Create multi-trace scatter chart with legend
+
+label_by options:
+- "chiller_count": Groups by number of chillers running (1, 2, 3, etc.)
+- "chiller_combination": Groups by specific chiller combo (CH-1, CH-1+CH-2, etc.)
+- "chiller_combination_fixed_count": Groups by combo, filtered to specific count""",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "title": {
+                "type": "string",
+                "description": "Chart title",
+            },
+            "time_range": {
+                "type": "string",
+                "description": "Time range: '24h', '7d', '30d'",
+                "default": "7d",
+            },
+            "x_metric": {
+                "type": "string",
+                "enum": ["cooling_rate", "power"],
+                "description": "X-axis metric (default: cooling_rate)",
+                "default": "cooling_rate",
+            },
+            "y_metric": {
+                "type": "string",
+                "enum": ["efficiency", "power", "cooling_rate"],
+                "description": "Y-axis metric (default: efficiency)",
+                "default": "efficiency",
+            },
+            "label_by": {
+                "type": "string",
+                "enum": ["chiller_count", "chiller_combination", "chiller_combination_fixed_count"],
+                "description": "How to label/group the data points",
+            },
+            "chiller_ids": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Chiller IDs to check status for (e.g., ['chiller_1', 'chiller_2', 'chiller_3', 'chiller_4'])",
+            },
+            "fixed_chiller_count": {
+                "type": "integer",
+                "description": "For 'chiller_combination_fixed_count': only show combinations with exactly N chillers",
+            },
+            "min_cooling_load": {
+                "type": "number",
+                "description": "Minimum cooling load to include (default: 50 RT)",
+                "default": 50,
+            },
+            "resolution": {
+                "type": "string",
+                "enum": ["15m", "1h"],
+                "description": "Data resolution",
+                "default": "15m",
+            },
+        },
+        "required": ["title", "label_by", "chiller_ids"],
+    },
+}
+
+
 # Tool definitions for Claude API
 CREATE_LINE_CHART_TOOL = {
     "name": "create_line_chart",
@@ -476,6 +552,225 @@ def execute_create_multi_axis_chart(
         }
     except Exception as e:
         logger.error(f"create_multi_axis_chart failed: {e}")
+        return {"success": False, "error": str(e)}
+
+
+async def execute_labeled_scatter_chart(
+    site_id: str,
+    title: str,
+    label_by: str,
+    chiller_ids: List[str],
+    time_range: str = "7d",
+    x_metric: str = "cooling_rate",
+    y_metric: str = "efficiency",
+    fixed_chiller_count: Optional[int] = None,
+    min_cooling_load: float = 50,
+    resolution: str = "15m",
+    **kwargs,
+) -> Dict[str, Any]:
+    """Execute labeled scatter chart with server-side grouping.
+
+    Queries plant data and chiller status, groups by label criteria,
+    and returns a multi-trace scatter chart.
+    """
+    from app.llm.tools.data_tools import execute_query_timeseries, execute_batch_query_timeseries
+    from collections import defaultdict
+    import asyncio
+
+    logger.info(f"[LABELED_SCATTER] Starting: label_by={label_by}, chillers={chiller_ids}")
+    logger.info(f"[LABELED_SCATTER] Time: {time_range}, Resolution: {resolution}")
+
+    try:
+        # Step 1: Query plant data
+        plant_result = await execute_query_timeseries(
+            site_id=site_id,
+            device_id="plant",
+            datapoints=["power", "cooling_rate"],
+            start_time=time_range,
+            end_time="now",
+            resample=resolution,
+            filter_outliers=True,
+            min_load=min_cooling_load,
+        )
+
+        if "error" in plant_result:
+            return {"success": False, "error": f"Failed to query plant data: {plant_result['error']}"}
+
+        plant_data = plant_result.get("data", [])
+        logger.info(f"[LABELED_SCATTER] Plant data: {len(plant_data)} rows")
+
+        if not plant_data:
+            return {"success": False, "error": "No plant data returned"}
+
+        # Calculate efficiency for plant data
+        for record in plant_data:
+            power = record.get("power", 0)
+            cooling_rate = record.get("cooling_rate", 0)
+            if cooling_rate and cooling_rate > 0:
+                record["efficiency"] = round(power / cooling_rate, 4)
+            else:
+                record["efficiency"] = None
+
+        # Step 2: Query chiller status using batch query
+        status_result = await execute_batch_query_timeseries(
+            site_id=site_id,
+            device_ids=chiller_ids,
+            datapoints=["status_read"],
+            start_time=time_range,
+            end_time="now",
+            resample=resolution,
+        )
+
+        if "error" in status_result:
+            return {"success": False, "error": f"Failed to query chiller status: {status_result['error']}"}
+
+        status_data = status_result.get("data", [])
+        logger.info(f"[LABELED_SCATTER] Chiller status: {len(status_data)} rows")
+
+        # Build status lookup by timestamp -> {device_id: status}
+        status_by_ts: Dict[str, Dict[str, float]] = defaultdict(dict)
+        for record in status_data:
+            ts = record.get("timestamp")
+            device_id = record.get("device_id")
+            status = record.get("status_read", 0)
+            if ts and device_id:
+                status_by_ts[ts][device_id] = status if status else 0
+
+        # Step 3: Join plant data with chiller status and compute labels
+        grouped_data: Dict[str, List[Dict]] = defaultdict(list)
+
+        for record in plant_data:
+            ts = record.get("timestamp")
+            x_val = record.get(x_metric)
+            y_val = record.get(y_metric)
+
+            if ts is None or x_val is None or y_val is None:
+                continue
+
+            # Get chiller statuses for this timestamp
+            statuses = status_by_ts.get(ts, {})
+
+            # Determine which chillers are running
+            running_chillers = [
+                ch for ch in chiller_ids
+                if statuses.get(ch, 0) >= 1
+            ]
+            num_running = len(running_chillers)
+
+            # Skip if no chillers running
+            if num_running == 0:
+                continue
+
+            # Compute label based on label_by
+            if label_by == "chiller_count":
+                label = f"{num_running} Chiller{'s' if num_running > 1 else ''}"
+            elif label_by == "chiller_combination":
+                # Format as "CH-1", "CH-1+CH-2", etc.
+                combo = "+".join([
+                    f"CH-{ch.split('_')[-1]}" for ch in sorted(running_chillers)
+                ])
+                label = combo
+            elif label_by == "chiller_combination_fixed_count":
+                if fixed_chiller_count is not None and num_running != fixed_chiller_count:
+                    continue  # Skip if not matching the fixed count
+                combo = "+".join([
+                    f"CH-{ch.split('_')[-1]}" for ch in sorted(running_chillers)
+                ])
+                label = combo
+            else:
+                label = f"{num_running} Chillers"
+
+            grouped_data[label].append({
+                "x": x_val,
+                "y": y_val,
+            })
+
+        logger.info(f"[LABELED_SCATTER] Groups: {list(grouped_data.keys())}")
+        for label, points in grouped_data.items():
+            logger.info(f"[LABELED_SCATTER]   {label}: {len(points)} points")
+
+        if not grouped_data:
+            return {"success": False, "error": "No data after grouping"}
+
+        # Step 4: Build traces for multi-trace scatter
+        colors = [
+            "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
+            "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf"
+        ]
+
+        # Sort labels for consistent ordering
+        if label_by == "chiller_count":
+            # Sort numerically by chiller count
+            sorted_labels = sorted(grouped_data.keys(), key=lambda x: int(x.split()[0]))
+        else:
+            # Sort alphabetically
+            sorted_labels = sorted(grouped_data.keys())
+
+        traces = []
+        for i, label in enumerate(sorted_labels):
+            points = grouped_data[label]
+            traces.append({
+                "type": "scatter",
+                "mode": "markers",
+                "name": label,
+                "x": [p["x"] for p in points],
+                "y": [p["y"] for p in points],
+                "marker": {
+                    "size": 6,
+                    "opacity": 0.7,
+                    "color": colors[i % len(colors)],
+                },
+            })
+
+        # Build axis labels
+        x_label_map = {
+            "cooling_rate": "Cooling Load (RT)",
+            "power": "Power (kW)",
+        }
+        y_label_map = {
+            "efficiency": "Efficiency (kW/RT)",
+            "power": "Power (kW)",
+            "cooling_rate": "Cooling Load (RT)",
+        }
+
+        spec = {
+            "data": traces,
+            "layout": {
+                "title": {"text": title, "x": 0.5},
+                "xaxis": {
+                    "title": x_label_map.get(x_metric, x_metric),
+                    "gridcolor": "rgba(128,128,128,0.2)",
+                    "showgrid": True,
+                },
+                "yaxis": {
+                    "title": y_label_map.get(y_metric, y_metric),
+                    "gridcolor": "rgba(128,128,128,0.2)",
+                    "showgrid": True,
+                },
+                "hovermode": "closest",
+                "legend": {"orientation": "h", "y": -0.15, "x": 0.5, "xanchor": "center"},
+                "paper_bgcolor": "rgba(0,0,0,0)",
+                "plot_bgcolor": "rgba(0,0,0,0)",
+            },
+        }
+
+        total_points = sum(len(grouped_data[l]) for l in grouped_data)
+        logger.info(f"[LABELED_SCATTER] Chart created: {len(traces)} traces, {total_points} points")
+
+        return {
+            "success": True,
+            "chart_type": "labeled_scatter",
+            "plotly_spec": spec,
+            "data_summary": {
+                "label_by": label_by,
+                "groups": list(sorted_labels),
+                "total_points": total_points,
+                "time_range": time_range,
+            },
+        }
+
+    except Exception as e:
+        logger.error(f"[LABELED_SCATTER] Failed: {e}", exc_info=True)
         return {"success": False, "error": str(e)}
 
 
@@ -1032,14 +1327,16 @@ TOOL_EXECUTORS = {
 # Async executors (need site_id)
 ASYNC_TOOL_EXECUTORS = {
     "query_and_chart": execute_query_and_chart,
+    "labeled_scatter_chart": execute_labeled_scatter_chart,
 }
 
 # All chart tool definitions
 CHART_TOOLS = [
     QUERY_AND_CHART_TOOL,  # Put this first so AI sees it first
+    LABELED_SCATTER_CHART_TOOL,  # Server-side grouping for labeled scatter (much faster!)
     CREATE_LINE_CHART_TOOL,
     CREATE_SCATTER_CHART_TOOL,
-    CREATE_MULTI_TRACE_SCATTER_TOOL,  # For categorical labeling (chiller count, etc.)
+    CREATE_MULTI_TRACE_SCATTER_TOOL,  # For manual categorical labeling
     CREATE_BAR_CHART_TOOL,
     CREATE_MULTI_AXIS_CHART_TOOL,
 ]

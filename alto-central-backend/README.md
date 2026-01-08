@@ -458,10 +458,11 @@ The AI (Claude Sonnet) uses these tools:
 | Tool | Description |
 |------|-------------|
 | `query_and_chart` | Combined query + chart for simple requests |
+| `labeled_scatter_chart` | **Server-side** labeled scatter (chiller count/combo) - fastest! |
 | `query_timeseries` | Query single device historical data |
-| `batch_query_timeseries` | Query multiple devices in parallel (faster) |
+| `batch_query_timeseries` | Query multiple devices in parallel |
 | `create_scatter_chart` | Scatter with optional color gradient |
-| `create_multi_trace_scatter` | Scatter with labeled groups (for chiller count, etc.) |
+| `create_multi_trace_scatter` | Manual scatter with labeled groups |
 | `create_line_chart` | Time series trends |
 | `create_bar_chart` | Categorical comparisons |
 

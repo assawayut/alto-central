@@ -146,34 +146,30 @@ query_and_chart(
 )
 ```
 
-### Key Principle
-For complex labeling:
-1. Query main data: query_timeseries for plant (power, cooling_rate)
-2. Query labeling data: Use `batch_query_timeseries` to get status from ALL chillers in ONE call!
-3. Join data by timestamp
-4. Group data by the labeling criteria
-5. Use create_multi_trace_scatter to create the chart
+### BEST: Use `labeled_scatter_chart` for Chiller Labeling
 
-**IMPORTANT**: Use `batch_query_timeseries` instead of multiple `query_timeseries` calls!
-This is MUCH faster - it queries all devices in parallel in one tool call.
+For labeling by chiller count or combination, use the `labeled_scatter_chart` tool!
+It handles EVERYTHING server-side in ONE call - much faster and simpler.
 
-Example workflow for "plant efficiency labeled by number of chillers running":
 ```
-1. query_timeseries: plant (power, cooling_rate) -> efficiency data
-2. batch_query_timeseries: ["chiller_1", "chiller_2", "chiller_3", "chiller_4"] (status_read) -> all status in ONE call
-3. Join data by timestamp, count running chillers (status_read >= 1)
-4. Group: {1: [points], 2: [points], 3: [points]}
-5. create_multi_trace_scatter(
-     traces=[
-       {"name": "1 Chiller", "x": [cooling loads], "y": [efficiencies]},
-       {"name": "2 Chillers", "x": [cooling loads], "y": [efficiencies]},
-       {"name": "3 Chillers", "x": [cooling loads], "y": [efficiencies]}
-     ],
-     title="Plant Efficiency by Chiller Count",
-     x_label="Cooling Load (RT)",
-     y_label="Efficiency (kW/RT)"
-   )
+labeled_scatter_chart(
+  title="Plant Efficiency by Chiller Count",
+  label_by="chiller_count",  # or "chiller_combination" or "chiller_combination_fixed_count"
+  chiller_ids=["chiller_1", "chiller_2", "chiller_3", "chiller_4"],
+  time_range="7d",
+  fixed_chiller_count=2  # optional: only for chiller_combination_fixed_count
+)
 ```
+
+label_by options:
+- `chiller_count`: Groups by 1 Chiller, 2 Chillers, 3 Chillers, etc.
+- `chiller_combination`: Groups by CH-1, CH-1+CH-2, CH-2+CH-3, etc.
+- `chiller_combination_fixed_count`: Same as above but filtered to specific count
+
+### Manual Approach (only if labeled_scatter_chart doesn't fit)
+For other labeling criteria (wetbulb temp, custom grouping), use:
+1. `batch_query_timeseries` to fetch data from multiple devices
+2. `create_multi_trace_scatter` with manually grouped traces
 
 ## Workflow
 1. First, query the relevant data using data tools
