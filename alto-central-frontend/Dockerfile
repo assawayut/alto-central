@@ -23,8 +23,8 @@ RUN npm install --legacy-peer-deps
 # Copy frontend source code
 COPY alto-central-frontend/ .
 
-# Build the application with limited memory
-ENV NODE_OPTIONS="--max-old-space-size=512"
+# Build the application
+ENV NODE_OPTIONS="--max-old-space-size=1536"
 RUN npm run build
 
 # =============================================================================
