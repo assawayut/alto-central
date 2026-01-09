@@ -17,14 +17,14 @@ COPY config /config
 # Copy package files for dependency installation
 COPY alto-central-frontend/package.json alto-central-frontend/package-lock.json ./
 
-# Install dependencies
-RUN npm ci --silent
+# Install dependencies (use npm install for lower memory usage)
+RUN npm install --legacy-peer-deps
 
 # Copy frontend source code
 COPY alto-central-frontend/ .
 
-# Build the application
-# The vite.config.ts alias @config points to ../config which is /config in container
+# Build the application with limited memory
+ENV NODE_OPTIONS="--max-old-space-size=512"
 RUN npm run build
 
 # =============================================================================
