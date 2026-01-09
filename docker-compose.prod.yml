@@ -43,7 +43,9 @@ services:
       - REDIS_URL=redis://host.docker.internal:6379/1
       # Local postgres for app data
       - LOCAL_DB_URL=postgresql+asyncpg://alto:alto@alto-central-db:5432/alto_central
-      - ENABLE_LLM=false
+      # LLM
+      - ENABLE_LLM=true
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
     volumes:
       - ./config:/app/config:ro
     depends_on:
