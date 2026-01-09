@@ -24,7 +24,6 @@ services:
     restart: unless-stopped
     networks:
       - alto-central-network
-      - default
 
   # ============================================================================
   # Backend API (FastAPI)
@@ -80,9 +79,6 @@ services:
 networks:
   alto-central-network:
     driver: bridge
-  default:
-    external: true
-    name: bridge
 
 volumes:
   alto_central_db_data:
