@@ -36,9 +36,9 @@ class TemplateManager:
                        Defaults to project_root/templates
         """
         if base_path is None:
-            # Default to project_root/templates
-            # app/analytics/templates/manager.py -> project_root
-            base_path = Path(__file__).parent.parent.parent.parent.parent / "templates"
+            # Default to app_root/templates
+            # app/analytics/templates/manager.py -> /app (in Docker)
+            base_path = Path(__file__).parent.parent.parent.parent / "templates"
 
         self.base_path = Path(base_path)
         self.builtin_path = self.base_path / "builtin"
