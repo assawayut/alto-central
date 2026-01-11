@@ -294,6 +294,8 @@ class PlotlyBuilder:
         y2_label: str,
         y1_names: Optional[List[str]] = None,
         y2_names: Optional[List[str]] = None,
+        y1_chart_type: str = "line",
+        y2_chart_type: str = "line",
     ) -> Dict[str, Any]:
         """Build a dual y-axis chart specification.
 
@@ -308,6 +310,8 @@ class PlotlyBuilder:
             y2_label: Secondary y-axis label
             y1_names: Names for primary axis series
             y2_names: Names for secondary axis series
+            y1_chart_type: Chart type for primary axis ('line' or 'bar')
+            y2_chart_type: Chart type for secondary axis ('line' or 'bar')
 
         Returns:
             Complete Plotly figure specification
@@ -320,38 +324,62 @@ class PlotlyBuilder:
             y_values = [d.get(y_field) for d in data]
             name = y1_names[i] if y1_names and i < len(y1_names) else y_field
 
-            traces.append(
-                {
-                    "type": "scatter",
-                    "mode": "lines",
-                    "name": name,
-                    "x": x_values,
-                    "y": y_values,
-                    "yaxis": "y",
-                    "line": {"color": cls.COLOR_PALETTE[i], "width": 2},
-                }
-            )
+            if y1_chart_type == "bar":
+                traces.append(
+                    {
+                        "type": "bar",
+                        "name": name,
+                        "x": x_values,
+                        "y": y_values,
+                        "yaxis": "y",
+                        "marker": {"color": cls.COLOR_PALETTE[i], "opacity": 0.8},
+                    }
+                )
+            else:
+                traces.append(
+                    {
+                        "type": "scatter",
+                        "mode": "lines",
+                        "name": name,
+                        "x": x_values,
+                        "y": y_values,
+                        "yaxis": "y",
+                        "line": {"color": cls.COLOR_PALETTE[i], "width": 2},
+                    }
+                )
 
         # Secondary axis traces
         for i, y_field in enumerate(y2_fields):
             y_values = [d.get(y_field) for d in data]
             name = y2_names[i] if y2_names and i < len(y2_names) else y_field
 
-            traces.append(
-                {
-                    "type": "scatter",
-                    "mode": "lines",
-                    "name": name,
-                    "x": x_values,
-                    "y": y_values,
-                    "yaxis": "y2",
-                    "line": {
-                        "color": cls.COLOR_PALETTE[len(y1_fields) + i],
-                        "width": 2,
-                        "dash": "dot",
-                    },
-                }
-            )
+            if y2_chart_type == "bar":
+                traces.append(
+                    {
+                        "type": "bar",
+                        "name": name,
+                        "x": x_values,
+                        "y": y_values,
+                        "yaxis": "y2",
+                        "marker": {"color": cls.COLOR_PALETTE[len(y1_fields) + i], "opacity": 0.8},
+                    }
+                )
+            else:
+                traces.append(
+                    {
+                        "type": "scatter",
+                        "mode": "lines",
+                        "name": name,
+                        "x": x_values,
+                        "y": y_values,
+                        "yaxis": "y2",
+                        "line": {
+                            "color": cls.COLOR_PALETTE[len(y1_fields) + i],
+                            "width": 2,
+                            "dash": "dot",
+                        },
+                    }
+                )
 
         layout = {
             **cls.DEFAULT_LAYOUT,

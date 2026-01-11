@@ -360,7 +360,12 @@ CREATE_MULTI_AXIS_CHART_TOOL = {
     "name": "create_multi_axis_chart",
     "description": """Create a chart with two y-axes for different scales.
 Use when comparing metrics with different units (e.g., power kW and temperature °F).
-Returns a complete Plotly JSON specification.""",
+Supports different chart types per axis (bar or line).
+Returns a complete Plotly JSON specification.
+
+Examples:
+- Daily energy (bar) on left axis + average temperature (line) on right axis
+- Power consumption (bar) on left + efficiency trend (line) on right""",
     "input_schema": {
         "type": "object",
         "properties": {
@@ -384,6 +389,16 @@ Returns a complete Plotly JSON specification.""",
             "x_label": {"type": "string", "description": "X-axis label"},
             "y1_label": {"type": "string", "description": "Primary y-axis label"},
             "y2_label": {"type": "string", "description": "Secondary y-axis label"},
+            "y1_chart_type": {
+                "type": "string",
+                "enum": ["line", "bar"],
+                "description": "Chart type for primary axis: 'line' or 'bar' (default: line)",
+            },
+            "y2_chart_type": {
+                "type": "string",
+                "enum": ["line", "bar"],
+                "description": "Chart type for secondary axis: 'line' or 'bar' (default: line)",
+            },
         },
         "required": ["data", "x_field", "y1_fields", "y2_fields", "title", "x_label", "y1_label", "y2_label"],
     },
@@ -601,6 +616,8 @@ def execute_create_multi_axis_chart(
     x_label: str,
     y1_label: str,
     y2_label: str,
+    y1_chart_type: str = "line",
+    y2_chart_type: str = "line",
     **kwargs,
 ) -> Dict[str, Any]:
     """Execute multi-axis chart creation."""
@@ -614,6 +631,8 @@ def execute_create_multi_axis_chart(
             x_label=x_label,
             y1_label=y1_label,
             y2_label=y2_label,
+            y1_chart_type=y1_chart_type,
+            y2_chart_type=y2_chart_type,
         )
         return {
             "success": True,

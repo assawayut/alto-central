@@ -450,6 +450,10 @@ Content-Type: application/json
 | "Chiller_1 efficiency today vs yesterday" | Period comparison (x-axis: hour of day) |
 | "Plant efficiency when only chiller_2 running" | Filtered by equipment status |
 | "Power trend for the last 24 hours" | Line chart time series |
+| "3D plot of power, cooling load, and wetbulb" | 3D scatter for 3 variables |
+| "Daily energy as bar chart with avg temp as line" | Multi-axis with different chart types |
+| "Plant efficiency labeled by chiller count" | Labeled scatter (1, 2, 3 chillers) |
+| "Plant data for November 2025" | Supports date ranges (2025-11-01/2025-11-30) |
 
 **AI Tool Features:**
 
@@ -462,9 +466,11 @@ The AI (Claude Sonnet) uses these tools:
 | `query_timeseries` | Query single device historical data |
 | `batch_query_timeseries` | Query multiple devices in parallel |
 | `create_scatter_chart` | Scatter with optional color gradient |
+| `create_3d_scatter_chart` | 3D scatter for 3-variable relationships |
 | `create_multi_trace_scatter` | Manual scatter with labeled groups |
 | `create_line_chart` | Time series trends |
 | `create_bar_chart` | Categorical comparisons |
+| `create_multi_axis_chart` | Dual y-axis with bar/line per axis |
 
 **Filtering options** (via `query_and_chart`):
 
@@ -477,13 +483,15 @@ The AI (Claude Sonnet) uses these tools:
 | Load filter | `filters: {min_cooling_load: 100}` | Minimum cooling load threshold |
 | Time filter | `filters: {time_of_day: {start: 8, end: 18}}` | Filter by working hours |
 
-**Complex labeling** (AI handles automatically):
+**Advanced visualizations** (AI handles automatically):
 
-| Labeling Type | Tool Used | Example |
+| Visualization | Tool Used | Example |
 |---------------|-----------|---------|
-| By continuous value | `create_scatter_chart` with `color_field` | Color by wetbulb temperature |
-| By category | `create_multi_trace_scatter` | Label by chiller count (1, 2, 3 chillers) |
-| By combination | `create_multi_trace_scatter` | Label by which chillers are running |
+| Color by continuous value | `create_scatter_chart` with `color_field` | Color by wetbulb temperature |
+| Label by category | `labeled_scatter_chart` | Label by chiller count (1, 2, 3 chillers) |
+| Label by combination | `labeled_scatter_chart` | Label by which chillers are running |
+| 3D relationships | `create_3d_scatter_chart` | Power vs load vs wetbulb |
+| Mixed chart types | `create_multi_axis_chart` | Bar on left axis, line on right axis |
 
 **Device ID patterns:**
 - `plant` - Aggregate plant data

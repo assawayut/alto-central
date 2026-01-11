@@ -349,11 +349,18 @@ def _parse_relative_time(time_str: str, is_end: bool = False) -> datetime:
         return dt
 
     # Handle ISO 8601 interval format (start/end separated by /)
-    if "/" in time_str and "T" in time_str:
+    # Supports both datetime (2025-11-01T00:00:00/2025-11-30T23:59:59) and date-only (2025-11-01/2025-11-30)
+    if "/" in time_str:
         parts = time_str.split("/")
         if len(parts) == 2:
             target = parts[1] if is_end else parts[0]
             try:
+                # Handle date-only format (add time component)
+                if "T" not in target:
+                    if is_end:
+                        target = f"{target}T23:59:59"  # End of day
+                    else:
+                        target = f"{target}T00:00:00"  # Start of day
                 dt = datetime.fromisoformat(target.replace("Z", "+00:00"))
                 return _ensure_tz(dt)
             except ValueError:
