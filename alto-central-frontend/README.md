@@ -21,7 +21,7 @@ A centralized HVAC (Heating, Ventilation, and Air Conditioning) operation monito
 - **Build Tool**: Vite 5
 - **Styling**: Tailwind CSS 3 with CSS variables
 - **Maps**: MapLibre GL JS with OpenStreetMap tiles
-- **Charts**: ECharts + echarts-for-react
+- **Charts**: ECharts + echarts-for-react, Plotly.js + react-plotly.js (AI Analytics)
 - **Icons**: Lucide React, React Icons
 - **Date/Time**: Luxon
 - **Routing**: React Router DOM v6
@@ -214,7 +214,7 @@ sites:
 | `DataAnalyticsCard` | Opens DataAnalyticsModal |
 | `DataAnalyticsModal` | Container with 4 tabs for analytics |
 | `CoolingTowerTradeoffTab` | `/analytics/cooling-tower-tradeoff` API (line chart: CDS vs Power) |
-| `IntelligentAnalyticsTab` | AI-powered chart generation with chat interface, streaming support |
+| `IntelligentAnalyticsTab` | AI-powered chart generation with chat interface, SSE streaming, dual y-axis support, auto-resize input |
 | `UpcomingEventsCard` | `/events/upcoming` API (scheduled chiller sequences, maintenance) |
 | `OptimizationCard` | Placeholder for future ML optimization features |
 

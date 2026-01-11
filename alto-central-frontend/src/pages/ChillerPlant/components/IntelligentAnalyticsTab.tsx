@@ -444,19 +444,26 @@ const IntelligentAnalyticsTab: React.FC<IntelligentAnalyticsTabProps> = ({ siteI
 
         {/* Input Area */}
         <div className="border-t p-3 bg-white">
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
+          <div className="flex items-end gap-2">
+            <textarea
+              ref={(el) => {
+                if (el) {
+                  el.style.height = 'auto';
+                  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+                }
+              }}
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Ask about your data..."
-              className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-[#0E7EE4] focus:ring-1 focus:ring-[#0E7EE4]"
+              rows={1}
+              className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-[#0E7EE4] focus:ring-1 focus:ring-[#0E7EE4] resize-none overflow-y-auto"
+              style={{ minHeight: '38px', maxHeight: '120px' }}
             />
             <button
               onClick={() => handleGenerate()}
               disabled={loading || !prompt.trim()}
-              className="p-2 bg-[#0E7EE4] text-white rounded-lg hover:bg-[#0a6bc4] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="p-2 bg-[#0E7EE4] text-white rounded-lg hover:bg-[#0a6bc4] disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0"
             >
               <FiSend className="w-4 h-4" />
             </button>
@@ -493,8 +500,13 @@ const IntelligentAnalyticsTab: React.FC<IntelligentAnalyticsTabProps> = ({ siteI
                     margin: {
                       l: backendLayout?.margin?.l || 60,
                       r: hasYaxis2 ? Math.max(backendLayout?.margin?.r || 80, 100) : (backendLayout?.margin?.r || 60),
-                      t: backendLayout?.margin?.t || 50,
+                      t: Math.max(backendLayout?.margin?.t || 60, 70), // Extra top margin for modebar
                       b: backendLayout?.margin?.b || 60,
+                    },
+                    // Position legend below the modebar
+                    legend: {
+                      ...backendLayout?.legend,
+                      y: backendLayout?.legend?.y ?? 0.95,
                     },
                   };
 
@@ -520,7 +532,8 @@ const IntelligentAnalyticsTab: React.FC<IntelligentAnalyticsTabProps> = ({ siteI
                 })()}
                 config={{
                   responsive: true,
-                  displayModeBar: true,
+                  displayModeBar: 'hover',
+                  displaylogo: false,
                   modeBarButtonsToRemove: ['lasso2d', 'select2d'],
                 }}
                 useResizeHandler
