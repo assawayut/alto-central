@@ -880,6 +880,11 @@ async def execute_list_available_datapoints(
             "description": "Pumps - primary (pchp), secondary (schp), condenser (cdp)",
             "datapoints": ["status_read", "efficiency", "power", "alarm", "freqeuncy_read"],
         },
+        "indoor_air_quality": {
+            "pattern": "indoor_air_quality_{N}",
+            "description": "Indoor air quality",
+            "datapoints": ["humidity", "temperature"],
+        },
     }
 
     # Filter by device type
